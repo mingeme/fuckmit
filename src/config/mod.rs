@@ -165,6 +165,21 @@ impl Config {
             .get(provider)
             .ok_or_else(|| anyhow::anyhow!("Provider not found: {}", provider))
     }
+    
+    /// Get all configured providers
+    pub fn get_providers(&self) -> &HashMap<String, ProviderConfig> {
+        &self.providers
+    }
+    
+    /// Check if any providers are configured
+    pub fn has_providers(&self) -> bool {
+        !self.providers.is_empty()
+    }
+    
+    /// Get the name of the active provider, if set
+    pub fn get_active_provider_name(&self) -> Option<&str> {
+        self.active_provider.as_deref()
+    }
 
     pub fn get_commit_config(&self) -> Result<CommitConfig> {
         // Try to load from local .fuckmit.yml file first

@@ -34,6 +34,9 @@ enum AuthSubcommand {
         /// Value to set
         value: String,
     },
+    
+    /// List all configured providers
+    List,
 }
 
 impl AuthCommand {
@@ -70,6 +73,43 @@ impl AuthCommand {
                 config.set_provider_property(provider_name, property, value)?;
                 config.save()?;
                 println!("Property updated successfully");
+            }
+            AuthSubcommand::List => {
+                let config = Config::load()?;
+                let active_provider = config.get_active_provider_name();
+                
+                if !config.has_providers() {
+                    println!("No providers configured. Use 'fuckmit auth add <provider> <apiKey>' to add a provider.");
+                    return Ok(());
+                }
+                
+                println!("Configured providers:\n");
+                println!("{:<2} {:<15} {:<25} {}", "", "PROVIDER", "MODEL", "ENDPOINT");
+                println!("{}", "-".repeat(80));
+                
+                for (name, provider_config) in config.get_providers() {
+                    let active_marker = if Some(name.as_str()) == active_provider {
+                        "*"
+                    } else {
+                        " "
+                    };
+                    
+                    let model = provider_config.model
+                        .as_ref()
+                        .map(|m| m.to_string())
+                        .unwrap_or_else(|| "<not set>".to_string());
+                    
+                    let endpoint = provider_config.endpoint
+                        .as_ref()
+                        .map(|e| e.to_string())
+                        .unwrap_or_else(|| "<default>".to_string());
+                    
+                    println!("{:<2} {:<15} {:<25} {}", active_marker, name, model, endpoint);
+                }
+                
+                if active_provider.is_none() {
+                    println!("\nNo active provider set. Use 'fuckmit auth use <provider>' to set one.");
+                }
             }
         }
         
