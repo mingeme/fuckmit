@@ -1,4 +1,5 @@
 pub mod anthropic;
+pub mod deepseek;
 pub mod openai;
 pub mod qwen;
 
@@ -34,6 +35,14 @@ pub fn get_provider(provider_name: &str) -> Result<Box<dyn Provider>> {
         }
         "anthropic" => {
             let provider = anthropic::AnthropicProvider::new(
+                &provider_config.api_key,
+                provider_config.model.clone(),
+                provider_config.endpoint.clone(),
+            );
+            Ok(Box::new(provider))
+        }
+        "deepseek" => {
+            let provider = deepseek::DeepSeekProvider::new(
                 &provider_config.api_key,
                 provider_config.model.clone(),
                 provider_config.endpoint.clone(),
