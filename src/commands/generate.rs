@@ -1,5 +1,6 @@
 use anyhow::{Result, Context};
 use git2::{Repository, StatusOptions};
+use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::config::Config;
 use crate::providers::get_provider;
@@ -61,20 +62,27 @@ pub async fn generate_commit(dry_run: bool, amend: bool) -> Result<()> {
     // Get the provider
     let provider = get_provider(&active_provider)?;
     
-    // Generate commit message
-    println!("Generating commit message...");
+    // Generate commit message with a dynamic loading indicator
+    let spinner = ProgressBar::new_spinner();
+    spinner.set_style(ProgressStyle::default_spinner()
+        .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
+        .template("{spinner} Generating commit message...").unwrap());
+    spinner.enable_steady_tick(std::time::Duration::from_millis(100));
+    
     let commit_message = provider.generate_commit_message(&diff).await?;
     
-    println!("\n{}\n", commit_message);
+    // Clear the spinner when done
+    spinner.finish_and_clear();
+    
+    // Print the generated message
+    println!("{}\n", commit_message);
     
     // Create or amend commit if not in dry-run mode
     if !dry_run {
         if amend {
-            println!("Amending commit with new message...");
             git::amend_commit(&repo, &commit_message)?;
             println!("Commit amended successfully");
         } else {
-            println!("Creating commit...");
             git::create_commit(&repo, &commit_message)?;
             println!("Commit created successfully");
         }
