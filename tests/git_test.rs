@@ -109,23 +109,6 @@ fn test_amend_commit() -> Result<()> {
     let test_file_path = repo_path.join("test.txt");
     fs::write(&test_file_path, "Test content")?;
 
-    // Configure git to use the test user globally for this test
-    std::process::Command::new("git")
-        .current_dir(repo_path)
-        .arg("config")
-        .arg("--global")
-        .arg("user.name")
-        .arg("Test User")
-        .output()?;
-
-    std::process::Command::new("git")
-        .current_dir(repo_path)
-        .arg("config")
-        .arg("--global")
-        .arg("user.email")
-        .arg("test@example.com")
-        .output()?;
-
     // Stage the file
     let mut index = repo.index()?;
     index.add_path(Path::new("test.txt"))?;
