@@ -50,7 +50,6 @@ impl AuthCommand {
                 println!("Provider {} added successfully", provider);
             }
             AuthSubcommand::Use { provider } => {
-                println!("Setting active provider to: {}", provider);
                 let mut config = Config::load()?;
                 if config.set_active_provider(provider)? {
                     config.save()?;
