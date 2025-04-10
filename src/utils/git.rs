@@ -206,7 +206,7 @@ pub fn amend_commit(repo: &Repository, message: &str) -> Result<()> {
 }
 
 /// Get the git signature from config or default
-fn get_signature(repo: &Repository) -> Result<Signature<'static>> {
+pub fn get_signature(repo: &Repository) -> Result<Signature<'static>> {
     let config = repo.config()?;
     
     let name = config.get_string("user.name")
@@ -216,4 +216,35 @@ fn get_signature(repo: &Repository) -> Result<Signature<'static>> {
         .unwrap_or_else(|_| String::from("unknown@example.com"));
     
     Ok(Signature::now(&name, &email)?)
+}
+
+/// Add all untracked and modified files to the staging area
+pub fn add_all_files(repo: &Repository) -> Result<()> {
+    // Use git2 to stage all modified and untracked files
+    let mut index = repo.index()?;
+    
+    // Get the status of all files in the repository
+    let statuses = repo.statuses(Some(
+        git2::StatusOptions::new()
+            .include_untracked(true)
+            .recurse_untracked_dirs(true)
+    ))?;
+    
+    // Add each modified or untracked file to the index
+    for entry in statuses.iter() {
+        if let Some(path) = entry.path() {
+            // Check if the file is modified, new, or renamed but not staged
+            if entry.status().is_wt_modified() || 
+               entry.status().is_wt_new() || 
+               entry.status().is_wt_renamed() || 
+               entry.status().is_wt_typechange() {
+                index.add_path(std::path::Path::new(path))?;
+            }
+        }
+    }
+    
+    // Write the updated index back to disk
+    index.write()?;
+    
+    Ok(())
 }

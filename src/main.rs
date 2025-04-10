@@ -12,8 +12,12 @@ pub struct Cli {
     dry_run: bool,
 
     /// Amend the last commit with a new message
-    #[arg(short, long)]
+    #[arg(short = 'A', long)]
     amend: bool,
+
+    /// Add all untracked and modified files before generating commit
+    #[arg(short, long)]
+    add: bool,
 }
 
 #[tokio::main]
@@ -28,7 +32,8 @@ async fn main() -> anyhow::Result<()> {
             // Default behavior: generate commit message
             let dry_run = cli.dry_run;
             let amend = cli.amend;
-            fuckmit::commands::generate::generate_commit(dry_run, amend).await?
+            let add = cli.add;
+            fuckmit::commands::generate::generate_commit(dry_run, amend, add).await?
         }
     }
     
