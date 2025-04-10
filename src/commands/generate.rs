@@ -86,12 +86,10 @@ pub async fn generate_commit(dry_run: bool, amend: bool) -> Result<()> {
             git::create_commit(&repo, &commit_message)?;
             println!("Commit created successfully");
         }
+    } else if amend {
+        println!("Dry run mode - no commit amended");
     } else {
-        if amend {
-            println!("Dry run mode - no commit amended");
-        } else {
-            println!("Dry run mode - no commit created");
-        }
+        println!("Dry run mode - no commit created");
     }
     
     Ok(())

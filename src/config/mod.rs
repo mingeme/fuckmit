@@ -48,10 +48,11 @@ impl Default for CommitConfig {
 
 impl CommitConfig {
     /// Creates a new CommitConfig with the specified exclude patterns
-    pub fn with_excludes(exclude_patterns: Vec<String>) -> Self {
-        let mut config = Self::default();
-        config.exclude = exclude_patterns;
-        config
+    pub fn new(exclude_patterns: Vec<String>) -> Self {
+        Self {
+            exclude: exclude_patterns,
+            ..Default::default()
+        }
     }
 }
 

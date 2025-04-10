@@ -20,9 +20,9 @@ fn test_default_commit_config() {
     // Check that default excludes are empty
     assert!(default_config.exclude.is_empty());
 
-    // Check that with_excludes method works correctly
+    // Check that new method works correctly
     let exclude_patterns = vec!["test-pattern.json".to_string()];
-    let config_with_excludes = CommitConfig::with_excludes(exclude_patterns.clone());
+    let config_with_excludes = CommitConfig::new(exclude_patterns.clone());
     assert_eq!(config_with_excludes.exclude, exclude_patterns);
 }
 

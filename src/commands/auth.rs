@@ -83,7 +83,7 @@ impl AuthCommand {
                 }
                 
                 println!("Configured providers:\n");
-                println!("{:<2} {:<15} {:<25} {}", "", "PROVIDER", "MODEL", "ENDPOINT");
+                println!("{:<2} {:<15} {:<25} ENDPOINT", "", "PROVIDER", "MODEL");
                 println!("{}", "-".repeat(80));
                 
                 for (name, provider_config) in config.get_providers() {
