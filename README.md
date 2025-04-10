@@ -14,6 +14,14 @@ AI-powered git commit message generator implemented in Rust.
 
 ### From Source
 
+If you have already installed the Rust toolchain (including `cargo`), you can directly use the following command to install from the GitHub repository:
+
+```bash
+cargo install --locked --git https://github.com/mingeme/fuckmit
+```
+
+Or manually clone and build:
+
 ```bash
 # Clone the repository
 git clone https://github.com/mingeme/fuckmit.git
