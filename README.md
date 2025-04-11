@@ -53,17 +53,19 @@ fuckmit auth add <provider> <apiKey>
 # or
 fuckmit auth use <provider>
 # or set specific provider properties
-fuckmit auth set <provider>.<model/apiKey/endpoint> <value>
+fuckmit auth set <provider>.<model/api_key/endpoint> <value>
 
 # Manage commit configurations
-fuckmit prompt init        # Create a default commit configuration in current directory
-fuckmit prompt init --global  # Create a default commit configuration in global config directory
-fuckmit prompt show        # Show current commit configuration
+fuckmit config init        # Create a default commit configuration in current directory
+fuckmit config init --global  # Create a default commit configuration in global config directory
+fuckmit config show        # Show current commit configuration
+fuckmit config list        # List all commit configurations
+fuckmit config use <config>  # Set the current commit configuration
 ```
 
 ## Customizing Commit Messages
 
-You can customize the prompts used for generating commit messages by creating a `.fuckmit.yml` or `.fuckmit.yaml` file either in your current working directory or in the global config directory (`~/.config/fuckmit/`).
+You can customize the prompts used for generating commit messages by creating a `.fuckmit.yml` or `.fuckmit.yaml` file either in your current working directory or in the global config directory (Linux: `~/.config/fuckmit/` or MacOS: `~/Library/Application Support/fuckmit/` or Windows: `C:\Users\<username>\AppData\Roaming\fuckmit` or `FUCKMIT_CONFIG_DIR` environment variable).
 
 The file should have the following format:
 
