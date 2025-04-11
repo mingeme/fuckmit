@@ -85,6 +85,12 @@ exclude:
 
 The `{{diff}}` placeholder will be replaced with the actual git diff content.
 
+## Zsh Plugin
+
+A Zsh plugin is available to provide convenient aliases and functions for `fuckmit`.
+
+See the [plugin](https://github.com/mingeme/fuckmit-zsh) for more details and other installation methods.
+
 ## Development
 
 ```bash
