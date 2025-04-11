@@ -108,6 +108,21 @@ impl Config {
 
         Ok(path)
     }
+    
+    /// Get the config directory path
+    pub fn get_config_dir() -> Result<PathBuf> {
+        // Check if FUCKMIT_CONFIG_DIR environment variable is set (for testing)
+        if let Ok(config_dir) = std::env::var("FUCKMIT_CONFIG_DIR") {
+            return Ok(PathBuf::from(config_dir));
+        }
+
+        // Default path
+        let mut path = dirs::config_dir()
+            .ok_or_else(|| anyhow::anyhow!("Could not determine config directory"))?;
+
+        path.push("fuckmit");
+        Ok(path)
+    }
 
     pub fn add_provider(&mut self, provider: &str, api_key: &str) -> Result<()> {
         let provider_config = ProviderConfig {
@@ -193,6 +208,7 @@ impl Config {
     }
 
     fn load_local_commit_config() -> Result<CommitConfig> {
+        // First check for local config files in current directory
         let local_paths = [".fuckmit.yml", ".fuckmit.yaml"];
 
         for path in local_paths.iter() {
@@ -208,6 +224,33 @@ impl Config {
             }
         }
 
-        Err(anyhow::anyhow!("Local commit config not found"))
+        // If no local config, check for global config
+        if let Ok(config_dir) = Self::get_config_dir() {
+            // First check the symlink to the active configuration
+            let symlink_path = config_dir.join(".fuckmit.yml");
+            if symlink_path.exists() {
+                let config_str = std::fs::read_to_string(&symlink_path)
+                    .context("Failed to read active commit config")?;
+
+                let config: CommitConfig = serde_yaml::from_str(&config_str)
+                    .context("Failed to parse active commit config")?;
+
+                return Ok(config);
+            }
+            
+            // If no symlink, check for default configuration
+            let default_path = config_dir.join("default.fuckmit.yml");
+            if default_path.exists() {
+                let config_str = std::fs::read_to_string(&default_path)
+                    .context("Failed to read default commit config")?;
+
+                let config: CommitConfig = serde_yaml::from_str(&config_str)
+                    .context("Failed to parse default commit config")?;
+
+                return Ok(config);
+            }
+        }
+
+        Err(anyhow::anyhow!("Commit config not found"))
     }
 }
