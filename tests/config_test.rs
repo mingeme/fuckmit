@@ -1,65 +1,204 @@
-use anyhow::Result;
+use assert_cmd::Command;
+use predicates::prelude::*;
 use std::fs;
-use std::path::Path;
 use tempfile::TempDir;
 
-// Import the Config struct from our crate
-// Note: This assumes the config module is public in our crate
-use fuckmit::config::{Config, CommitConfig};
-
-#[test]
-fn test_default_commit_config() {
-    let default_config = CommitConfig::default();
-
-    // Check that the default system prompt is not empty
-    assert!(!default_config.prompt.system.is_empty());
-
-    // Check that the default user prompt contains the diff placeholder
-    assert!(default_config.prompt.user.contains("{{diff}}"));
-
-    // Check that default excludes are empty
-    assert!(default_config.exclude.is_empty());
-
-    // Check that new method works correctly
-    let exclude_patterns = vec!["test-pattern.json".to_string()];
-    let config_with_excludes = CommitConfig::new(exclude_patterns.clone());
-    assert_eq!(config_with_excludes.exclude, exclude_patterns);
+// Helper function to set up a temporary config directory
+fn setup_temp_config_dir() -> TempDir {
+    let temp_dir = tempfile::tempdir().unwrap();
+    // Create the fuckmit directory inside the temp directory
+    let fuckmit_dir = temp_dir.path().join("fuckmit");
+    fs::create_dir_all(&fuckmit_dir).unwrap();
+    temp_dir
 }
 
 #[test]
-fn test_save_and_load_config() -> Result<()> {
-    // Create a temporary directory for testing
-    let temp_dir = TempDir::new()?;
-    let config_dir = temp_dir.path().join("config");
-    fs::create_dir_all(&config_dir)?;
+fn test_config_init_global() {
+    let temp_dir = setup_temp_config_dir();
+    let config_dir = temp_dir.path().to_str().unwrap();
+    
+    // Run the config init --global command
+    let mut cmd = Command::cargo_bin("fuckmit").unwrap();
+    let assert = cmd
+        .env("FUCKMIT_CONFIG_DIR", config_dir)
+        .arg("config")
+        .arg("init")
+        .arg("--global")
+        .assert();
+    
+    assert.success()
+        .stdout(predicate::str::contains("Created new config file"));
+    
+    // Verify that default.fuckmit.yml was created
+    let default_config = temp_dir.path().join("fuckmit").join("default.fuckmit.yml");
+    assert!(default_config.exists(), "default.fuckmit.yml should exist");
+}
 
-    // Set the config directory environment variable for testing
-    std::env::set_var("FUCKMIT_CONFIG_DIR", config_dir.to_str().unwrap());
+#[test]
+fn test_config_list() {
+    let temp_dir = setup_temp_config_dir();
+    let config_dir = temp_dir.path().to_str().unwrap();
+    let fuckmit_dir = temp_dir.path().join("fuckmit");
+    
+    // Create default config first to ensure it exists
+    let mut cmd = Command::cargo_bin("fuckmit").unwrap();
+    cmd.env("FUCKMIT_CONFIG_DIR", config_dir)
+       .arg("config")
+       .arg("init")
+       .arg("--global")
+       .assert()
+       .success();
+    
+    // Create additional test configurations
+    fs::write(
+        fuckmit_dir.join("custom1.fuckmit.yml"),
+        "prompt:\n  system: Custom system prompt 1\n  user: Custom user prompt 1"
+    ).unwrap();
+    fs::write(
+        fuckmit_dir.join("custom2.fuckmit.yml"),
+        "prompt:\n  system: Custom system prompt 2\n  user: Custom user prompt 2"
+    ).unwrap();
+    
+    // Run the config list command
+    let mut cmd = Command::cargo_bin("fuckmit").unwrap();
+    let assert = cmd
+        .env("FUCKMIT_CONFIG_DIR", config_dir)
+        .arg("config")
+        .arg("list")
+        .assert();
+    
+    assert.success()
+        .stdout(predicate::str::contains("Available configurations:"))
+        .stdout(predicate::str::contains("default"))
+        .stdout(predicate::str::contains("custom1"))
+        .stdout(predicate::str::contains("custom2"));
+}
 
-    // Create a test config
-    let mut config = Config::default();
-    config.add_provider("test_provider", "test_api_key")?;
-    config.set_active_provider("test_provider")?;
+#[test]
+fn test_config_use() {
+    let temp_dir = setup_temp_config_dir();
+    let config_dir = temp_dir.path().to_str().unwrap();
+    let fuckmit_dir = temp_dir.path().join("fuckmit");
+    
+    // Create default config first to ensure it exists
+    let mut cmd = Command::cargo_bin("fuckmit").unwrap();
+    cmd.env("FUCKMIT_CONFIG_DIR", config_dir)
+       .arg("config")
+       .arg("init")
+       .arg("--global")
+       .assert()
+       .success();
+    
+    // Create a custom configuration
+    let custom_content = "prompt:\n  system: Custom system prompt\n  user: Custom user prompt";
+    let custom_path = fuckmit_dir.join("custom.fuckmit.yml");
+    fs::write(&custom_path, custom_content).unwrap();
+    
+    // Use the custom configuration
+    let mut cmd = Command::cargo_bin("fuckmit").unwrap();
+    cmd.env("FUCKMIT_CONFIG_DIR", config_dir)
+       .arg("config")
+       .arg("use")
+       .arg("custom")
+       .assert()
+       .success();
+    
+    // Verify that the symlink was created and points to the custom config
+    let symlink = fuckmit_dir.join(".fuckmit.yml");
+    assert!(symlink.exists(), ".fuckmit.yml symlink should exist");
+    
+    // Run the config list command to verify that custom is marked as active
+    let mut cmd = Command::cargo_bin("fuckmit").unwrap();
+    let assert = cmd
+        .env("FUCKMIT_CONFIG_DIR", config_dir)
+        .arg("config")
+        .arg("list")
+        .assert();
+    
+    assert.success()
+        .stdout(predicate::str::contains("custom (active)"));
+}
 
-    // Save the config
-    config.save()?;
+#[test]
+fn test_config_use_nonexistent() {
+    let temp_dir = setup_temp_config_dir();
+    let config_dir = temp_dir.path().to_str().unwrap();
+    
+    // Try to use a non-existent configuration
+    let mut cmd = Command::cargo_bin("fuckmit").unwrap();
+    cmd.env("FUCKMIT_CONFIG_DIR", config_dir)
+       .arg("config")
+       .arg("use")
+       .arg("nonexistent")
+       .assert()
+       .failure()
+       .stderr(predicate::str::contains("Configuration 'nonexistent' not found"));
+}
 
-    // Check that the config file was created
-    let config_path = config_dir.join("config.yml");
-    assert!(Path::new(&config_path).exists());
+#[test]
+fn test_config_show() {
+    // Test showing the default global configuration when no local config exists
+    let temp_dir = setup_temp_config_dir();
+    let config_dir = temp_dir.path().to_str().unwrap();
+    
+    // Create default config first to ensure it exists
+    let mut cmd = Command::cargo_bin("fuckmit").unwrap();
+    cmd.env("FUCKMIT_CONFIG_DIR", config_dir)
+       .arg("config")
+       .arg("init")
+       .arg("--global")
+       .assert()
+       .success();
+       
+    // Run the config show command (should use the global default config)
+    let mut cmd = Command::cargo_bin("fuckmit").unwrap();
+    let assert = cmd
+        .env("FUCKMIT_CONFIG_DIR", config_dir)
+        .arg("config")
+        .arg("show")
+        .assert();
+    
+    assert.success()
+        .stdout(predicate::str::contains("generates clear and concise git commit messages"));
+}
 
-    // Load the config
-    let loaded_config = Config::load()?;
+#[test]
+fn test_config_show_local() {
+    // Test showing a custom configuration when it's set as active
+    let temp_dir = setup_temp_config_dir();
+    let config_dir = temp_dir.path().to_str().unwrap();
+    let fuckmit_dir = temp_dir.path().join("fuckmit");
+    
+    // Create default config first to ensure it exists
+    let mut cmd = Command::cargo_bin("fuckmit").unwrap();
+    cmd.env("FUCKMIT_CONFIG_DIR", config_dir)
+       .arg("config")
+       .arg("init")
+       .arg("--global")
+       .assert()
+       .success();
+    
+    // Create a custom configuration
+    let custom_content = "prompt:\n  system: Custom system prompt\n  user: Custom user prompt\nexclude: []";
+    let custom_path = fuckmit_dir.join(".fuckmit.yml");
+    fs::write(&custom_path, custom_content).unwrap();
 
-    // Check that the loaded config has the correct provider
-    let provider_config = loaded_config.get_provider_config("test_provider")?;
-    assert_eq!(provider_config.api_key, "test_api_key");
-
-    // Check that the active provider is correct
-    assert_eq!(loaded_config.get_active_provider()?, "test_provider");
-
-    // Clean up
-    std::env::remove_var("FUCKMIT_CONFIG_DIR");
-
-    Ok(())
+    // Change to the temporary directory to use the local config
+    let original_dir = std::env::current_dir().unwrap();
+    std::env::set_current_dir(fuckmit_dir).unwrap();
+    
+    // Run the config show command (should use the local config)
+    let mut cmd = Command::cargo_bin("fuckmit").unwrap();
+    let assert = cmd
+        .env("FUCKMIT_CONFIG_DIR", config_dir)
+        .arg("config")
+        .arg("show")
+        .assert();
+    
+    assert.success()
+        .stdout(predicate::str::contains("Custom system prompt"))
+        .stdout(predicate::str::contains("Custom user prompt"));
+    
+    // Restore the original working directory
+    std::env::set_current_dir(original_dir).unwrap();
 }

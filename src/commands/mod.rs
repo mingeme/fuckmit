@@ -1,7 +1,7 @@
 pub mod auth;
 pub mod completion;
+pub mod config;
 pub mod generate;
-pub mod prompt;
 
 use clap::Subcommand;
 
@@ -13,8 +13,8 @@ pub enum Commands {
     /// Generate shell completions
     Completion(completion::CompletionCommand),
     
-    /// Prompt configuration commands
-    Prompt(prompt::PromptCommand),
+    /// Configuration commands
+    Config(config::ConfigCommand),
 }
 
 impl Commands {
@@ -22,7 +22,7 @@ impl Commands {
         match self {
             Commands::Auth(cmd) => cmd.execute().await,
             Commands::Completion(cmd) => cmd.execute().await,
-            Commands::Prompt(cmd) => cmd.execute().await,
+            Commands::Config(cmd) => cmd.execute().await,
         }
     }
 }

@@ -21,14 +21,14 @@ fn test_help_command() -> Result<()> {
 }
 
 #[test]
-fn test_prompt_init_command() -> Result<()> {
+fn test_config_init_command() -> Result<()> {
     // Create a temporary directory for testing
     let temp_dir = TempDir::new()?;
     let repo_path = temp_dir.path();
 
     let mut cmd = Command::cargo_bin("fuckmit")?;
 
-    cmd.current_dir(repo_path).arg("prompt").arg("init");
+    cmd.current_dir(repo_path).arg("config").arg("init");
 
     cmd.assert().success();
 
