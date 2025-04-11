@@ -3,8 +3,8 @@ use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-use crate::config::Config;
 use super::Provider;
+use crate::config::get_commit_config;
 
 pub struct AnthropicProvider {
     api_key: String,
@@ -51,12 +51,11 @@ impl AnthropicProvider {
 #[async_trait]
 impl Provider for AnthropicProvider {
     async fn generate_commit_message(&self, diff: &str) -> Result<String> {
-        let config = Config::load()?;
-        let commit_config = config.get_commit_config()?;
-        
+        let commit_config = get_commit_config()?;
+
         let system_prompt = commit_config.prompt.system;
         let user_prompt = commit_config.prompt.user.replace("{{diff}}", diff);
-        
+
         let messages = vec![
             Message {
                 role: "system".to_string(),
@@ -67,20 +66,22 @@ impl Provider for AnthropicProvider {
                 content: user_prompt,
             },
         ];
-        
+
         let request = AnthropicRequest {
             model: self.model.clone(),
             messages,
             max_tokens: 1000,
             temperature: 0.7,
         };
-        
-        let endpoint = self.endpoint.clone().unwrap_or_else(|| 
-            "https://api.anthropic.com/v1/messages".to_string()
-        );
-        
+
+        let endpoint = self
+            .endpoint
+            .clone()
+            .unwrap_or_else(|| "https://api.anthropic.com/v1/messages".to_string());
+
         // Send request to Anthropic API
-        let response = self.client
+        let response = self
+            .client
             .post(&endpoint)
             .header("x-api-key", &self.api_key)
             .header("anthropic-version", "2023-06-01")
@@ -90,11 +91,11 @@ impl Provider for AnthropicProvider {
             .await?
             .json::<AnthropicResponse>()
             .await?;
-        
+
         if response.content.is_empty() {
             return Err(anyhow::anyhow!("No response from Anthropic API"));
         }
-        
+
         Ok(response.content[0].text.trim().to_string())
     }
 }

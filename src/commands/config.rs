@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
 use std::fs;
-use std::path::{Path, PathBuf};
 use std::os::unix::fs as unix_fs;
+use std::path::{Path, PathBuf};
 
-use crate::config::{CommitConfig, Config};
+use crate::config::{get_commit_config, CommitConfig};
 
 #[derive(Args)]
 pub struct ConfigCommand {
@@ -41,7 +41,7 @@ impl ConfigCommand {
                 let target_path = if *global {
                     let config_dir = Self::get_config_dir()?;
                     std::fs::create_dir_all(&config_dir)?;
-                    
+
                     // Use default.fuckmit.yml as the base configuration file
                     config_dir.join("default.fuckmit.yml")
                 } else {
@@ -49,7 +49,10 @@ impl ConfigCommand {
                 };
 
                 if target_path.exists() {
-                    println!("Commit configuration already exists at {}", target_path.display());
+                    println!(
+                        "Commit configuration already exists at {}",
+                        target_path.display()
+                    );
                 } else {
                     // Create default commit config
                     let commit_config = CommitConfig::default();
@@ -60,18 +63,18 @@ impl ConfigCommand {
 
                     println!("Created new config file at {}", target_path.display());
                 }
-                
+
                 // If global, also create/update the .fuckmit.yml symlink
                 if *global {
                     let config_dir = Self::get_config_dir()?;
                     let symlink_path = config_dir.join(".fuckmit.yml");
-                    
+
                     // Remove existing symlink if it exists
                     if symlink_path.exists() {
                         // Ignore errors when removing existing file
                         let _ = fs::remove_file(&symlink_path);
                     }
-                    
+
                     // Create the symlink to the default configuration
                     if let Err(e) = unix_fs::symlink(&target_path, &symlink_path) {
                         // Only warn about symlink creation failure, don't fail the command
@@ -82,15 +85,16 @@ impl ConfigCommand {
                 }
             }
             ConfigSubcommand::Show => {
-                let config = Config::load()?;
-                let commit_config = config.get_commit_config()?;
+                let commit_config = get_commit_config()?;
 
                 println!("{}", serde_yaml::to_string(&commit_config)?);
             }
             ConfigSubcommand::List => {
                 let config_dir = Self::get_config_dir()?;
-                let entries = fs::read_dir(&config_dir)
-                    .context(format!("Failed to read config directory: {}", config_dir.display()))?;
+                let entries = fs::read_dir(&config_dir).context(format!(
+                    "Failed to read config directory: {}",
+                    config_dir.display()
+                ))?;
 
                 let mut configs = Vec::new();
                 for entry in entries {
@@ -104,77 +108,93 @@ impl ConfigCommand {
                 // Check if .fuckmit.yml symlink exists and what it points to
                 let symlink_path = config_dir.join(".fuckmit.yml");
                 let active_target = if symlink_path.exists() && symlink_path.is_symlink() {
-                    fs::read_link(&symlink_path).ok().map(|p| p.file_name().unwrap_or_default().to_string_lossy().to_string())
+                    fs::read_link(&symlink_path).ok().map(|p| {
+                        p.file_name()
+                            .unwrap_or_default()
+                            .to_string_lossy()
+                            .to_string()
+                    })
                 } else {
                     None
                 };
 
                 println!("Available configurations:\n");
                 let has_configs = !configs.is_empty();
-                
+
                 for config_path in &configs {
-                    let file_name = config_path.file_name().unwrap_or_default().to_string_lossy();
+                    let file_name = config_path
+                        .file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy();
                     let is_active = match &active_target {
                         Some(target) if target == &file_name => " (active)",
                         _ => "",
                     };
-                    
+
                     // Strip the .fuckmit.yml extension for display
                     let display_name = file_name.to_string();
-                    let display_name = display_name.strip_suffix(".fuckmit.yml")
+                    let display_name = display_name
+                        .strip_suffix(".fuckmit.yml")
                         .or_else(|| display_name.strip_suffix(".fuckmit.yaml"))
                         .unwrap_or(&display_name);
-                    
+
                     println!("  {}{}", display_name, is_active);
                 }
 
                 if !has_configs {
-                    println!("No configurations found. Create one with 'fuckmit config init --global'.");
+                    println!(
+                        "No configurations found. Create one with 'fuckmit config init --global'."
+                    );
                 }
             }
             ConfigSubcommand::Use { name } => {
                 let config_dir = Self::get_config_dir()?;
-                
+
                 // Ensure the config directory exists
                 fs::create_dir_all(&config_dir)?;
-                
+
                 // Determine the source file path
-                let source_file = if name.ends_with(".fuckmit.yml") || name.ends_with(".fuckmit.yaml") {
-                    config_dir.join(name)
-                } else {
-                    config_dir.join(format!("{}.fuckmit.yml", name))
-                };
-                
+                let source_file =
+                    if name.ends_with(".fuckmit.yml") || name.ends_with(".fuckmit.yaml") {
+                        config_dir.join(name)
+                    } else {
+                        config_dir.join(format!("{}.fuckmit.yml", name))
+                    };
+
                 // Check if the source file exists
                 if !source_file.exists() {
                     return Err(anyhow::anyhow!("Configuration '{}' not found", name));
                 }
-                
+
                 // Determine the symlink path
                 let symlink_path = config_dir.join(".fuckmit.yml");
-                
+
                 // Remove existing symlink if it exists
                 if symlink_path.exists() {
                     // Ignore errors when removing existing file
                     let _ = fs::remove_file(&symlink_path);
                 }
-                
+
                 // Create the symlink
                 match unix_fs::symlink(&source_file, &symlink_path) {
-                    Ok(_) => {},
+                    Ok(_) => {}
                     Err(e) => {
-                        return Err(anyhow::anyhow!("Failed to create symlink from {} to {}: {}", 
-                                    source_file.display(), symlink_path.display(), e));
+                        return Err(anyhow::anyhow!(
+                            "Failed to create symlink from {} to {}: {}",
+                            source_file.display(),
+                            symlink_path.display(),
+                            e
+                        ));
                     }
                 };
-                
+
                 println!("Now using '{}' as the active configuration", name);
             }
         }
 
         Ok(())
     }
-    
+
     /// Get the config directory for configurations
     fn get_config_dir() -> Result<PathBuf> {
         // First check if FUCKMIT_CONFIG_DIR environment variable is set
@@ -183,14 +203,14 @@ impl ConfigCommand {
             path.push("fuckmit");
             return Ok(path);
         }
-        
+
         // Fall back to default config directory
         let mut path = dirs::config_dir()
             .ok_or_else(|| anyhow::anyhow!("Could not determine config directory"))?;
         path.push("fuckmit");
         Ok(path)
     }
-    
+
     /// Check if a file is a valid config file
     fn is_config_file(path: &Path) -> bool {
         let file_name = path.file_name().unwrap_or_default().to_string_lossy();

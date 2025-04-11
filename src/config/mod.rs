@@ -4,10 +4,9 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Deserialize, Serialize, Default)]
-pub struct Config {
+pub struct AuthConfig {
     providers: HashMap<String, ProviderConfig>,
     active_provider: Option<String>,
-    commit: Option<CommitConfig>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -56,13 +55,13 @@ impl CommitConfig {
     }
 }
 
-impl Config {
+impl AuthConfig {
     pub fn load() -> Result<Self> {
-        let config_path = Self::get_config_path()?;
+        let config_path = Self::get_path()?;
 
         if !config_path.exists() {
-            println!("Config file not found, creating default config");
-            let default_config = Config::default();
+            println!("Auth config file not found, creating default config {}", config_path.display());
+            let default_config = AuthConfig::default();
             default_config.save()?;
             return Ok(default_config);
         }
@@ -70,14 +69,14 @@ impl Config {
         let config_str =
             std::fs::read_to_string(&config_path).context("Failed to read config file")?;
 
-        let config: Config =
+        let config: AuthConfig =
             serde_yaml::from_str(&config_str).context("Failed to parse config file")?;
 
         Ok(config)
     }
 
     pub fn save(&self) -> Result<()> {
-        let config_path = Self::get_config_path()?;
+        let config_path = Self::get_path()?;
 
         // Ensure parent directory exists
         if let Some(parent) = config_path.parent() {
@@ -91,11 +90,11 @@ impl Config {
         Ok(())
     }
 
-    pub fn get_config_path() -> Result<PathBuf> {
+    pub fn get_path() -> Result<PathBuf> {
         // Check if FUCKMIT_CONFIG_DIR environment variable is set (for testing)
         if let Ok(config_dir) = std::env::var("FUCKMIT_CONFIG_DIR") {
             let mut path = PathBuf::from(config_dir);
-            path.push("config.yml");
+            path.push("auth.yml");
             return Ok(path);
         }
 
@@ -104,23 +103,8 @@ impl Config {
             .ok_or_else(|| anyhow::anyhow!("Could not determine config directory"))?;
 
         path.push("fuckmit");
-        path.push("config.yml");
+        path.push("auth.yml");
 
-        Ok(path)
-    }
-    
-    /// Get the config directory path
-    pub fn get_config_dir() -> Result<PathBuf> {
-        // Check if FUCKMIT_CONFIG_DIR environment variable is set (for testing)
-        if let Ok(config_dir) = std::env::var("FUCKMIT_CONFIG_DIR") {
-            return Ok(PathBuf::from(config_dir));
-        }
-
-        // Default path
-        let mut path = dirs::config_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not determine config directory"))?;
-
-        path.push("fuckmit");
         Ok(path)
     }
 
@@ -181,76 +165,91 @@ impl Config {
             .get(provider)
             .ok_or_else(|| anyhow::anyhow!("Provider not found: {}", provider))
     }
-    
+
     /// Get all configured providers
     pub fn get_providers(&self) -> &HashMap<String, ProviderConfig> {
         &self.providers
     }
-    
+
     /// Check if any providers are configured
     pub fn has_providers(&self) -> bool {
         !self.providers.is_empty()
     }
-    
+
     /// Get the name of the active provider, if set
     pub fn get_active_provider_name(&self) -> Option<&str> {
         self.active_provider.as_deref()
     }
+}
 
-    pub fn get_commit_config(&self) -> Result<CommitConfig> {
-        // Try to load from local .fuckmit.yml file first
-        if let Ok(local_config) = Self::load_local_commit_config() {
-            return Ok(local_config);
-        }
-
-        // Fall back to config in global config
-        Ok(self.commit.clone().unwrap_or_default())
+/// Get the config directory path
+pub fn get_config_dir() -> Result<PathBuf> {
+    // Check if FUCKMIT_CONFIG_DIR environment variable is set (for testing)
+    if let Ok(config_dir) = std::env::var("FUCKMIT_CONFIG_DIR") {
+        return Ok(PathBuf::from(config_dir));
     }
 
-    fn load_local_commit_config() -> Result<CommitConfig> {
-        // First check for local config files in current directory
-        let local_paths = [".fuckmit.yml", ".fuckmit.yaml"];
+    // Default path
+    let mut path = dirs::config_dir()
+        .ok_or_else(|| anyhow::anyhow!("Could not determine config directory"))?;
 
-        for path in local_paths.iter() {
-            let path = Path::new(path);
-            if path.exists() {
-                let config_str =
-                    std::fs::read_to_string(path).context("Failed to read local commit config")?;
+    path.push("fuckmit");
+    Ok(path)
+}
 
-                let config: CommitConfig = serde_yaml::from_str(&config_str)
-                    .context("Failed to parse local commit config")?;
-
-                return Ok(config);
-            }
-        }
-
-        // If no local config, check for global config
-        if let Ok(config_dir) = Self::get_config_dir() {
-            // First check the symlink to the active configuration
-            let symlink_path = config_dir.join(".fuckmit.yml");
-            if symlink_path.exists() {
-                let config_str = std::fs::read_to_string(&symlink_path)
-                    .context("Failed to read active commit config")?;
-
-                let config: CommitConfig = serde_yaml::from_str(&config_str)
-                    .context("Failed to parse active commit config")?;
-
-                return Ok(config);
-            }
-            
-            // If no symlink, check for default configuration
-            let default_path = config_dir.join("default.fuckmit.yml");
-            if default_path.exists() {
-                let config_str = std::fs::read_to_string(&default_path)
-                    .context("Failed to read default commit config")?;
-
-                let config: CommitConfig = serde_yaml::from_str(&config_str)
-                    .context("Failed to parse default commit config")?;
-
-                return Ok(config);
-            }
-        }
-
-        Err(anyhow::anyhow!("Commit config not found"))
+pub fn get_commit_config() -> Result<CommitConfig> {
+    // Try to load from local .fuckmit.yml file first
+    if let Ok(local_config) = load_local_commit_config() {
+        return Ok(local_config);
     }
+
+    // Fall back to default commit config
+    Ok(CommitConfig::default())
+}
+
+fn load_local_commit_config() -> Result<CommitConfig> {
+    // First check for local config files in current directory
+    let local_paths = [".fuckmit.yml", ".fuckmit.yaml"];
+
+    for path in local_paths.iter() {
+        let path = Path::new(path);
+        if path.exists() {
+            let config_str =
+                std::fs::read_to_string(path).context("Failed to read local commit config")?;
+
+            let config: CommitConfig =
+                serde_yaml::from_str(&config_str).context("Failed to parse local commit config")?;
+
+            return Ok(config);
+        }
+    }
+
+    // If no local config, check for global config
+    if let Ok(config_dir) = get_config_dir() {
+        // First check the symlink to the active configuration
+        let symlink_path = config_dir.join(".fuckmit.yml");
+        if symlink_path.exists() {
+            let config_str = std::fs::read_to_string(&symlink_path)
+                .context("Failed to read active commit config")?;
+
+            let config: CommitConfig = serde_yaml::from_str(&config_str)
+                .context("Failed to parse active commit config")?;
+
+            return Ok(config);
+        }
+
+        // If no symlink, check for default configuration
+        let default_path = config_dir.join("default.fuckmit.yml");
+        if default_path.exists() {
+            let config_str = std::fs::read_to_string(&default_path)
+                .context("Failed to read default commit config")?;
+
+            let config: CommitConfig = serde_yaml::from_str(&config_str)
+                .context("Failed to parse default commit config")?;
+
+            return Ok(config);
+        }
+    }
+
+    Err(anyhow::anyhow!("Commit config not found"))
 }

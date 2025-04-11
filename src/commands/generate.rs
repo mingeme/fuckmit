@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use git2::{Repository, StatusOptions};
 use indicatif::{ProgressBar, ProgressStyle};
 
-use crate::config::Config;
+use crate::config::AuthConfig;
 use crate::providers::get_provider;
 use crate::utils::git;
 
@@ -65,7 +65,7 @@ pub async fn generate_commit(dry_run: bool, amend: bool, add: bool) -> Result<()
     };
 
     // Load config
-    let config = Config::load()?;
+    let config = AuthConfig::load()?;
     let active_provider = config.get_active_provider()?;
 
     // Get the provider

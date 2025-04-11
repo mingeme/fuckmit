@@ -4,7 +4,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use super::Provider;
-use crate::config::Config;
+use crate::config::get_commit_config;
 
 pub struct DeepSeekProvider {
     api_key: String,
@@ -56,8 +56,7 @@ impl DeepSeekProvider {
 #[async_trait]
 impl Provider for DeepSeekProvider {
     async fn generate_commit_message(&self, diff: &str) -> Result<String> {
-        let config = Config::load()?;
-        let commit_config = config.get_commit_config()?;
+        let commit_config = get_commit_config()?;
 
         let system_prompt = commit_config.prompt.system;
         let user_prompt = commit_config.prompt.user.replace("{{diff}}", diff);

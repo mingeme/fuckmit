@@ -6,7 +6,7 @@ pub mod qwen;
 use anyhow::Result;
 use async_trait::async_trait;
 
-use crate::config::Config;
+use crate::config::AuthConfig;
 
 #[async_trait]
 pub trait Provider {
@@ -14,15 +14,13 @@ pub trait Provider {
 }
 
 pub fn get_provider(provider_name: &str) -> Result<Box<dyn Provider>> {
-    let config = Config::load()?;
+    let config = AuthConfig::load()?;
     let provider_config = config.get_provider_config(provider_name)?;
 
     match provider_name {
         "qwen" => {
-            let provider = qwen::QwenProvider::new(
-                &provider_config.api_key,
-                provider_config.model.clone()
-            );
+            let provider =
+                qwen::QwenProvider::new(&provider_config.api_key, provider_config.model.clone());
             Ok(Box::new(provider))
         }
         "openai" => {

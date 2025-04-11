@@ -4,7 +4,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use super::Provider;
-use crate::config::Config;
+use crate::config::get_commit_config;
 
 pub struct QwenProvider {
     api_key: String,
@@ -68,8 +68,7 @@ impl QwenProvider {
 #[async_trait]
 impl Provider for QwenProvider {
     async fn generate_commit_message(&self, diff: &str) -> Result<String> {
-        let config = Config::load()?;
-        let commit_config = config.get_commit_config()?;
+        let commit_config = get_commit_config()?;
 
         let system_prompt = commit_config.prompt.system.replace("{{diff}}", diff);
         let user_prompt = commit_config.prompt.user.replace("{{diff}}", diff);

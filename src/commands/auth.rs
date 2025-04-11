@@ -1,7 +1,7 @@
 use clap::{Args, Subcommand};
 use anyhow::Result;
 
-use crate::config::Config;
+use crate::config::AuthConfig;
 
 #[derive(Args)]
 pub struct AuthCommand {
@@ -44,13 +44,13 @@ impl AuthCommand {
         match &self.command {
             AuthSubcommand::Add { provider, api_key } => {
                 println!("Adding provider: {}", provider);
-                let mut config = Config::load()?;
+                let mut config = AuthConfig::load()?;
                 config.add_provider(provider, api_key)?;
                 config.save()?;
                 println!("Provider {} added successfully", provider);
             }
             AuthSubcommand::Use { provider } => {
-                let mut config = Config::load()?;
+                let mut config = AuthConfig::load()?;
                 if config.set_active_provider(provider)? {
                     config.save()?;
                     println!("Active provider set to {}", provider);
@@ -68,13 +68,13 @@ impl AuthCommand {
                 let property = parts[1];
                 
                 println!("Setting {}.{} to {}", provider_name, property, value);
-                let mut config = Config::load()?;
+                let mut config = AuthConfig::load()?;
                 config.set_provider_property(provider_name, property, value)?;
                 config.save()?;
                 println!("Property updated successfully");
             }
             AuthSubcommand::List => {
-                let config = Config::load()?;
+                let config = AuthConfig::load()?;
                 let active_provider = config.get_active_provider_name();
                 
                 if !config.has_providers() {
@@ -107,7 +107,7 @@ impl AuthCommand {
                 }
                 
                 if active_provider.is_none() {
-                    println!("\nNo active provider set. Use 'fuckmit auth use <provider>' to set one.");
+                    eprintln!("\nNo active provider set. Use 'fuckmit auth use <provider>' to set one.");
                 }
             }
         }
