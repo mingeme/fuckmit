@@ -6,13 +6,13 @@ use crate::config::AuthConfig;
 use crate::providers::get_provider;
 use crate::utils::git;
 
-pub async fn generate_commit(dry_run: bool, amend: bool, add: bool) -> Result<()> {
+pub async fn generate_commit(dry_run: bool, amend: bool, add_all: bool) -> Result<()> {
     // Check if we're in a git repository
     let repo = Repository::open_from_env()
         .context("Failed to open git repository. Make sure you're in a git repository.")?;
 
-    // If add is true, add all untracked and modified files to the staging area
-    if add {
+    // If add_all is true, add all untracked and modified files to the staging area
+    if add_all {
         git::add_all_files(&repo)?;
     }
 

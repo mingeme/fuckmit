@@ -10,7 +10,7 @@ fn test_add_option_in_help() -> Result<()> {
     cmd.arg("--help");
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("--add"))
+        .stdout(predicate::str::contains("--add-all"))
         .stdout(predicate::str::contains("Add all untracked and modified files before generating commit"));
 
     Ok(())
@@ -31,8 +31,8 @@ fn test_capital_a_for_amend_option() -> Result<()> {
     let help_output = cmd.output()?.stdout;
     let help_text = String::from_utf8(help_output)?;
     
-    // Check that -a is for add, not for amend
-    assert!(help_text.contains("-a, --add"), "Expected -a to be for the add option");
+    // Check that -a is for add-all, not for amend
+    assert!(help_text.contains("-a, --add-all"), "Expected -a to be for the add-all option");
     assert!(help_text.contains("-A, --amend"), "Expected -A to be for the amend option");
 
     Ok(())
@@ -46,7 +46,7 @@ fn test_add_option_error_without_git_repo() -> Result<()> {
 
     let mut cmd = Command::cargo_bin("fuckmit")?;
 
-    cmd.current_dir(repo_path).arg("--add").arg("--dry-run");
+    cmd.current_dir(repo_path).arg("--add-all").arg("--dry-run");
 
     cmd.assert().failure().stderr(predicate::str::contains(
         "Failed to open git repository. Make sure you're in a git repository.",

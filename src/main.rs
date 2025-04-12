@@ -17,7 +17,7 @@ pub struct Cli {
 
     /// Add all untracked and modified files before generating commit
     #[arg(short, long)]
-    add: bool,
+    add_all: bool,
 }
 
 #[tokio::main]
@@ -32,8 +32,8 @@ async fn main() -> anyhow::Result<()> {
             // Default behavior: generate commit message
             let dry_run = cli.dry_run;
             let amend = cli.amend;
-            let add = cli.add;
-            fuckmit::commands::generate::generate_commit(dry_run, amend, add).await?
+            let add_all = cli.add_all;
+            fuckmit::commands::generate::generate_commit(dry_run, amend, add_all).await?
         }
     }
     
