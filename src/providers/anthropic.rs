@@ -70,7 +70,7 @@ impl Provider for AnthropicProvider {
         let request = AnthropicRequest {
             model: self.model.clone(),
             messages,
-            max_tokens: 1000,
+            max_tokens: 8192,
             temperature: 0.7,
         };
 

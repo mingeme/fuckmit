@@ -76,7 +76,7 @@ impl Provider for DeepSeekProvider {
             model: self.model.clone(),
             messages,
             temperature: 0.7,
-            max_tokens: Some(1024),
+            max_tokens: Some(8192),
         };
 
         let endpoint = self
