@@ -3,6 +3,7 @@ use assert_cmd::Command;
 use predicates::prelude::*;
 use std::fs;
 use std::path::Path;
+use std::process;
 use tempfile::TempDir;
 
 #[test]
@@ -82,7 +83,10 @@ fn test_amend_option_error_without_commits() -> Result<()> {
     let repo_path = temp_dir.path();
 
     // Initialize a git repository but don't create any commits
-    git2::Repository::init(repo_path)?;
+    process::Command::new("git")
+        .current_dir(repo_path)
+        .args(["init"])
+        .output()?;
 
     let mut cmd = Command::cargo_bin("fuckmit")?;
 

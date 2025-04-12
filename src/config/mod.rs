@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -100,7 +100,7 @@ impl AuthConfig {
 
         // Default path
         let mut path = dirs::config_dir()
-            .ok_or_else(|| anyhow::anyhow!("Could not determine config directory"))?;
+            .ok_or_else(|| anyhow!("Could not determine config directory"))?;
 
         path.push("fuckmit");
         path.push("auth.yml");
@@ -136,7 +136,7 @@ impl AuthConfig {
 
     pub fn get_active_provider(&self) -> Result<String> {
         self.active_provider.clone()
-            .ok_or_else(|| anyhow::anyhow!("No active provider set. Use 'fuckmit auth add <provider> <apiKey>' to add a provider."))
+            .ok_or_else(|| anyhow!("No active provider set. Use 'fuckmit auth add <provider> <apiKey>' to add a provider."))
     }
 
     pub fn set_provider_property(
@@ -148,13 +148,13 @@ impl AuthConfig {
         let provider_config = self
             .providers
             .get_mut(provider)
-            .ok_or_else(|| anyhow::anyhow!("Provider not found"))?;
+            .ok_or_else(|| anyhow!("Provider not found"))?;
 
         match property {
             "api_key" => provider_config.api_key = value.to_string(),
             "model" => provider_config.model = Some(value.to_string()),
             "endpoint" => provider_config.endpoint = Some(value.to_string()),
-            _ => return Err(anyhow::anyhow!("Invalid property: {}", property)),
+            _ => return Err(anyhow!("Invalid property: {}", property)),
         }
 
         Ok(())
@@ -163,7 +163,7 @@ impl AuthConfig {
     pub fn get_provider_config(&self, provider: &str) -> Result<&ProviderConfig> {
         self.providers
             .get(provider)
-            .ok_or_else(|| anyhow::anyhow!("Provider not found: {}", provider))
+            .ok_or_else(|| anyhow!("Provider not found: {}", provider))
     }
 
     /// Get all configured providers
@@ -191,7 +191,7 @@ pub fn get_config_dir() -> Result<PathBuf> {
 
     // Default path
     let mut path = dirs::config_dir()
-        .ok_or_else(|| anyhow::anyhow!("Could not determine config directory"))?;
+        .ok_or_else(|| anyhow!("Could not determine config directory"))?;
 
     path.push("fuckmit");
     Ok(path)
@@ -251,5 +251,5 @@ fn load_local_commit_config() -> Result<CommitConfig> {
         }
     }
 
-    Err(anyhow::anyhow!("Commit config not found"))
+    Err(anyhow!("Commit config not found"))
 }

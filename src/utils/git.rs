@@ -1,187 +1,129 @@
-use anyhow::Result;
-use git2::{DiffOptions, Repository, Signature};
-use glob::Pattern;
+use anyhow::{anyhow, Result};
+use tempfile::TempDir;
+use std::path::Path;
+use std::process::Command;
 
 use crate::config::get_commit_config;
 
+use super::file_pattern::filter_excluded_files;
+
+/// Get the list of staged file names
+pub fn get_staged_files(repo_path: &Path) -> Result<Vec<String>> {
+    let output = Command::new("git")
+        .current_dir(repo_path)
+        .args(["diff", "--staged", "--name-only"])
+        .output()?;
+
+    if !output.status.success() {
+        let error = String::from_utf8_lossy(&output.stderr);
+        return Err(anyhow!("Failed to get staged files: {}", error));
+    }
+
+    let files_output = String::from_utf8(output.stdout)?;
+    Ok(files_output.lines().map(|s| s.to_string()).collect())
+}
+
 /// Get the diff of staged changes
-pub fn get_staged_diff(repo: &Repository) -> Result<String> {
-    let commit_config = get_commit_config()?;
+pub fn get_staged_diff(repo_path: &Path) -> Result<String> {
+    let files = get_staged_files(repo_path)?;
+    let diff_files = filter_excluded_files(files, get_commit_config()?.exclude);
 
-    // Prepare diff options
-    let mut diff_opts = DiffOptions::new();
-    diff_opts
-        .include_untracked(true)
-        .recurse_untracked_dirs(true)
-        .show_binary(false);
+    // Run git diff --staged command to get staged changes
+    let output = Command::new("git")
+        .current_dir(repo_path)
+        .args(["diff", "--staged", "--"])
+        .args(diff_files)
+        .output()?;
 
-    // Get the diff between HEAD and index
-    let diff = repo.diff_tree_to_index(
-        repo.head()
-            .ok()
-            .and_then(|h| h.target())
-            .and_then(|oid| repo.find_commit(oid).ok())
-            .and_then(|c| c.tree().ok())
-            .as_ref(),
-        None,
-        Some(&mut diff_opts),
-    )?;
+    if !output.status.success() {
+        let error = String::from_utf8_lossy(&output.stderr);
+        return Err(anyhow!("Failed to get staged diff: {}", error));
+    }
 
-    // Convert diff to string
-    let mut diff_str = String::new();
-    diff.print(git2::DiffFormat::Patch, |_delta, _hunk, line| {
-        let content = std::str::from_utf8(line.content()).unwrap_or("");
-
-        // Check if this file should be excluded based on patterns
-        if let Some(file_path) = _delta.new_file().path() {
-            let file_path_str = file_path.to_string_lossy();
-            for exclude_pattern in &commit_config.exclude {
-                if let Ok(pattern) = Pattern::new(exclude_pattern) {
-                    if pattern.matches(&file_path_str) {
-                        // Skip excluded files silently
-                        return true;
-                    }
-                } else {
-                    eprintln!("Warning: Invalid exclude pattern: {}", exclude_pattern);
-                }
-            }
-        }
-
-        match line.origin() {
-            '+' | '-' | ' ' => diff_str.push(line.origin()),
-            _ => {}
-        }
-
-        diff_str.push_str(content);
-        true
-    })?;
-
-    Ok(diff_str)
+    let diff_output = String::from_utf8(output.stdout)?;
+    Ok(diff_output)
 }
 
 /// Create a commit with the given message
-pub fn create_commit(repo: &Repository, message: &str) -> Result<()> {
-    let signature = get_signature(repo)?;
+pub fn create_commit(repo_path: &Path, message: &str) -> Result<()> {
+    // Create a temporary file for the commit message
+    let temp_dir = TempDir::with_prefix("create_commit")?;
+    let message_file = temp_dir.path().join("commit_message.txt");
+    std::fs::write(&message_file, message)?;
 
-    let mut index = repo.index()?;
-    let tree_id = index.write_tree()?;
-    let tree = repo.find_tree(tree_id)?;
+    // Run git commit command
+    let output = Command::new("git")
+        .current_dir(repo_path)
+        .args(["commit", "-F", message_file.to_str().unwrap()])
+        .output()?;
 
-    let parent = match repo.head() {
-        Ok(head) => {
-            let head_target = head
-                .target()
-                .ok_or_else(|| anyhow::anyhow!("Failed to get HEAD target"))?;
-            Some(repo.find_commit(head_target)?)
-        }
-        Err(_) => None,
-    };
+    // Clean up the temporary file
+    let _ = std::fs::remove_file(message_file);
 
-    let parents = match parent {
-        Some(ref p) => vec![p],
-        None => vec![],
-    };
-
-    repo.commit(
-        Some("HEAD"),
-        &signature,
-        &signature,
-        message,
-        &tree,
-        parents.as_slice(),
-    )?;
+    if !output.status.success() {
+        let error = String::from_utf8_lossy(&output.stderr);
+        return Err(anyhow!("Failed to create commit: {}", error));
+    }
 
     Ok(())
 }
 
+/// Get the list of files in the last commit
+pub fn get_last_commit_files(repo_path: &Path) -> Result<Vec<String>> {
+    let output = Command::new("git")
+        .current_dir(repo_path)
+        .args(["show", "--format=", "--name-only"])
+        .output()?;
+
+    if !output.status.success() {
+        let error = String::from_utf8_lossy(&output.stderr);
+        return Err(anyhow!("Failed to get last commit files: {}", error));
+    }
+
+    let files_output = String::from_utf8(output.stdout)?;
+    let files: Vec<String> = files_output.lines().map(|s| s.to_string()).collect();
+    Ok(files)
+}
+
 /// Get the diff of the last commit
-pub fn get_last_commit_diff(repo: &Repository) -> Result<String> {
-    let commit_config = get_commit_config()?;
+pub fn get_last_commit_diff(repo_path: &Path) -> Result<String> {
+    let files = get_last_commit_files(repo_path)?;
+    let diff_files = filter_excluded_files(files, get_commit_config()?.exclude);
+    if diff_files.is_empty() {
+        return Err(anyhow!("No last commit files to diff"));
+    }
+    // Run git show command to get the diff of the last commit
+    let output = Command::new("git")
+        .current_dir(repo_path)
+        .args(["show", "--format=%", "HEAD", "--"])
+        .args(diff_files)
+        .output()?;
 
-    // Get the last commit
-    let head = repo
-        .head()?
-        .target()
-        .ok_or_else(|| anyhow::anyhow!("Failed to get HEAD target"))?;
+    if !output.status.success() {
+        let error = String::from_utf8_lossy(&output.stderr);
+        return Err(anyhow!("Failed to get last commit diff: {}", error));
+    }
 
-    let commit = repo.find_commit(head)?.clone();
-
-    // Get parent commit
-    let parent = if commit.parent_count() > 0 {
-        Some(commit.parent(0)?)
-    } else {
-        None
-    };
-
-    // Prepare diff options
-    let mut diff_opts = DiffOptions::new();
-    diff_opts.show_binary(false);
-
-    // Get the diff between the commit and its parent (or empty tree if no parent)
-    let diff = if let Some(parent) = parent {
-        let parent_tree = parent.tree()?;
-        let commit_tree = commit.tree()?;
-
-        repo.diff_tree_to_tree(Some(&parent_tree), Some(&commit_tree), Some(&mut diff_opts))?
-    } else {
-        // First commit - compare with empty tree
-        let commit_tree = commit.tree()?;
-        repo.diff_tree_to_tree(None, Some(&commit_tree), Some(&mut diff_opts))?
-    };
-
-    // Convert diff to string
-    let mut diff_str = String::new();
-    diff.print(git2::DiffFormat::Patch, |_delta, _hunk, line| {
-        let content = std::str::from_utf8(line.content()).unwrap_or("");
-
-        // Check if this file should be excluded based on patterns
-        if let Some(file_path) = _delta.new_file().path() {
-            let file_path_str = file_path.to_string_lossy();
-            for exclude_pattern in &commit_config.exclude {
-                if let Ok(pattern) = Pattern::new(exclude_pattern) {
-                    if pattern.matches(&file_path_str) {
-                        // Skip excluded files silently
-                        return true;
-                    }
-                } else {
-                    eprintln!("Warning: Invalid exclude pattern: {}", exclude_pattern);
-                }
-            }
-        }
-
-        match line.origin() {
-            '+' | '-' | ' ' => diff_str.push(line.origin()),
-            _ => {}
-        }
-
-        diff_str.push_str(content);
-        true
-    })?;
-
-    Ok(diff_str)
+    let diff_output = String::from_utf8(output.stdout)?;
+    Ok(diff_output)
 }
 
 /// Amend the last commit with a new message, including any staged changes
-pub fn amend_commit(repo: &Repository, message: &str) -> Result<()> {
-    // Get the repository path
-    let repo_path = repo
-        .path()
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("Failed to get repository path"))?;
-
+pub fn amend_commit(repo_path: &Path, message: &str) -> Result<()> {
     // Create a temporary file for the commit message
-    let temp_dir = std::env::temp_dir();
-    let message_file = temp_dir.join("commit_message.txt");
+    let temp_dir = TempDir::with_prefix("amend_commit")?;
+    let message_file = temp_dir.path().join("commit_message.txt");
     std::fs::write(&message_file, message)?;
 
     // Use git command line to amend the commit, including any staged changes
-    let output = std::process::Command::new("git")
+    let output = Command::new("git")
         .current_dir(repo_path)
-        .arg("commit")
-        .arg("--amend")
-        .arg("--file")
-        .arg(&message_file)
-        .arg("--no-edit") // Include staged changes without opening editor
+        .args([
+            "commit",
+            "--amend",
+            "--file",
+            message_file.to_str().unwrap(),
+        ])
         .output()?;
 
     // Clean up the temporary file
@@ -190,55 +132,234 @@ pub fn amend_commit(repo: &Repository, message: &str) -> Result<()> {
     // Check if the command was successful
     if !output.status.success() {
         let error = String::from_utf8_lossy(&output.stderr);
-        return Err(anyhow::anyhow!("Failed to amend commit: {}", error));
+        return Err(anyhow!("Failed to amend commit: {}", error));
     }
 
     Ok(())
 }
 
-/// Get the git signature from config or default
-pub fn get_signature(repo: &Repository) -> Result<Signature<'static>> {
-    let config = repo.config()?;
+#[cfg(test)]
+mod tests {
+    use std::fs;
 
-    let name = config
-        .get_string("user.name")
-        .unwrap_or_else(|_| String::from("Unknown"));
+    use tempfile::TempDir;
 
-    let email = config
-        .get_string("user.email")
-        .unwrap_or_else(|_| String::from("unknown@example.com"));
+    use super::*;
 
-    Ok(Signature::now(&name, &email)?)
-}
+    #[test]
+    fn test_create_commit() -> Result<()> {
+        // Create a temporary directory for testing
+        let temp_dir = TempDir::with_prefix("test_create_commit")?;
+        let repo_path = temp_dir.path();
 
-/// Add all untracked and modified files to the staging area
-pub fn add_all_files(repo: &Repository) -> Result<()> {
-    // Use git2 to stage all modified and untracked files
-    let mut index = repo.index()?;
+        // Initialize a test git repository
+        Command::new("git")
+            .current_dir(repo_path)
+            .args(["init"])
+            .output()?;
 
-    // Get the status of all files in the repository
-    let statuses = repo.statuses(Some(
-        git2::StatusOptions::new()
-            .include_untracked(true)
-            .recurse_untracked_dirs(true),
-    ))?;
+        // Create a test file
+        let test_file_path = repo_path.join("test.txt");
+        fs::write(&test_file_path, "Test content")?;
 
-    // Add each modified or untracked file to the index
-    for entry in statuses.iter() {
-        if let Some(path) = entry.path() {
-            // Check if the file is modified, new, or renamed but not staged
-            if entry.status().is_wt_modified()
-                || entry.status().is_wt_new()
-                || entry.status().is_wt_renamed()
-                || entry.status().is_wt_typechange()
-            {
-                index.add_path(std::path::Path::new(path))?;
-            }
-        }
+        // Stage the file
+        Command::new("git")
+            .current_dir(repo_path)
+            .args(["add", "test.txt"])
+            .output()?;
+
+        // Set git config for the test
+        Command::new("git")
+            .current_dir(repo_path)
+            .args(["config", "user.name", "Test User"])
+            .output()?;
+        Command::new("git")
+            .current_dir(repo_path)
+            .args(["config", "user.email", "test@example.com"])
+            .output()?;
+
+        // Create a commit
+        let message = "Test commit message";
+        create_commit(repo_path, message)?;
+
+        // Verify the commit was created
+        let output = Command::new("git")
+            .current_dir(repo_path)
+            .args(["log", "-1", "--pretty=format:%s|%an|%ae"])
+            .output()?;
+
+        let commit_info = String::from_utf8(output.stdout)?;
+        let parts: Vec<&str> = commit_info.split('|').collect();
+
+        assert_eq!(parts[0], message);
+        assert_eq!(parts[1], "Test User");
+        assert_eq!(parts[2], "test@example.com");
+
+        Ok(())
     }
 
-    // Write the updated index back to disk
-    index.write()?;
+    #[test]
+    fn test_get_last_commit_diff() -> Result<()> {
+        // Create a temporary directory for testing
+        let temp_dir = TempDir::with_prefix("test_get_last_commit_diff")?;
+        let repo_path = temp_dir.path();
 
-    Ok(())
+        // Initialize a test git repository
+        Command::new("git")
+            .current_dir(repo_path)
+            .args(["init"])
+            .output()?;
+
+        // Set git config for the test
+        Command::new("git")
+            .current_dir(repo_path)
+            .args(["config", "user.name", "Test User"])
+            .output()?;
+        Command::new("git")
+            .current_dir(repo_path)
+            .args(["config", "user.email", "test@example.com"])
+            .output()?;
+
+        // Create a test file
+        let test_file_path = repo_path.join("test.txt");
+        fs::write(&test_file_path, "Test content")?;
+
+        // Stage the file
+        Command::new("git")
+            .current_dir(repo_path)
+            .args(["add", "test.txt"])
+            .output()?;
+
+        // Create a commit
+        Command::new("git")
+            .current_dir(repo_path)
+            .args(["commit", "-m", "Initial commit"])
+            .output()?;
+
+        // Get the diff of the last commit
+        let diff = get_last_commit_diff(repo_path)?;
+
+        // Verify the diff contains the expected content
+        assert!(diff.contains("+Test content"));
+        assert!(diff.contains("test.txt"));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_amend_commit() -> Result<()> {
+        // Create a temporary directory for testing
+        let temp_dir = TempDir::new()?;
+        let repo_path = temp_dir.path();
+
+        // Initialize a test git repository
+        Command::new("git")
+            .current_dir(repo_path)
+            .args(["init"])
+            .output()?;
+
+        // Set git config for the test
+        Command::new("git")
+            .current_dir(repo_path)
+            .args(["config", "user.name", "Test User"])
+            .output()?;
+        Command::new("git")
+            .current_dir(repo_path)
+            .args(["config", "user.email", "test@example.com"])
+            .output()?;
+
+        // Create a test file
+        let test_file_path = repo_path.join("test.txt");
+        fs::write(&test_file_path, "Test content")?;
+
+        // Stage the file
+        Command::new("git")
+            .current_dir(repo_path)
+            .args(["add", "test.txt"])
+            .output()?;
+
+        // Create a commit using our utility function
+        create_commit(repo_path, "Initial commit")?;
+
+        // Get the original commit message
+        let output = Command::new("git")
+            .current_dir(repo_path)
+            .args(["log", "-1", "--pretty=format:%s"])
+            .output()?;
+        let original_message = String::from_utf8(output.stdout)?;
+        assert_eq!(original_message, "Initial commit");
+
+        // Amend the commit with a new message
+        let new_message = "Amended commit message";
+        amend_commit(repo_path, new_message)?;
+
+        // Verify the commit was amended by checking the new message
+        let output = Command::new("git")
+            .current_dir(repo_path)
+            .args(["log", "-1", "--pretty=format:%s"])
+            .output()?;
+        let amended_message = String::from_utf8(output.stdout)?;
+
+        // Git might add a newline at the end, so we'll trim and compare
+        assert_eq!(amended_message.trim(), new_message);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_get_staged_diff() -> Result<()> {
+        // Create a temporary directory for testing
+        let temp_dir = TempDir::new()?;
+        let repo_path = temp_dir.path();
+
+        // Initialize a test git repository
+        Command::new("git")
+            .current_dir(repo_path)
+            .args(["init"])
+            .output()?;
+
+        // Set git config for the test
+        Command::new("git")
+            .current_dir(repo_path)
+            .args(["config", "user.name", "Test User"])
+            .output()?;
+        Command::new("git")
+            .current_dir(repo_path)
+            .args(["config", "user.email", "test@example.com"])
+            .output()?;
+
+        // Create and commit an initial file
+        let test_file_path = repo_path.join("test.txt");
+        fs::write(&test_file_path, "Initial content")?;
+
+        // Stage the file
+        Command::new("git")
+            .current_dir(repo_path)
+            .args(["add", "test.txt"])
+            .output()?;
+
+        // Create initial commit
+        Command::new("git")
+            .current_dir(repo_path)
+            .args(["commit", "-m", "Initial commit"])
+            .output()?;
+
+        // Modify the file
+        fs::write(&test_file_path, "Modified content")?;
+
+        // Stage the changes
+        Command::new("git")
+            .current_dir(repo_path)
+            .args(["add", "test.txt"])
+            .output()?;
+
+        // Get the diff
+        let diff = get_staged_diff(repo_path)?;
+
+        // Verify the diff contains the expected changes
+        assert!(diff.contains("+Modified content"));
+        assert!(diff.contains("-Initial content"));
+
+        Ok(())
+    }
 }
