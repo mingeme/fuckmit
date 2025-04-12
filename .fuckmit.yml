@@ -7,4 +7,5 @@ prompt:
     Generate a concise git commit message for the following changes:
 
     {{diff}}
-exclude: []
+exclude:
+  - "Cargo.lock"
