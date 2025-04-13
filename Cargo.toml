@@ -27,7 +27,6 @@ regex = "1.11.1"
 tempfile = "3.8"
 
 [dev-dependencies]
-tempfile = "3.8"
 test-case = "3.2"
 assert_cmd = "2.0"
 predicates = "3.0"

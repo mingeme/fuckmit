@@ -36,9 +36,7 @@ pub fn matches_glob_pattern(file_path: &str, pattern: &str) -> bool {
     }
 
     // Handle recursive pattern with **/ prefix
-    if pattern.starts_with("**/") {
-        // Remove **/ prefix
-        let suffix = &pattern[3..];
+    if let Some(suffix) = pattern.strip_prefix("**/") {
         // Check if the file path ends with the suffix at any level
         return file_path.ends_with(suffix) || file_path.contains(&format!("/{}", suffix));
     }
