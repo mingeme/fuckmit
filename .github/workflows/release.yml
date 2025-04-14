@@ -62,20 +62,33 @@ jobs:
           args: --release --target ${{ matrix.target }}
           use-cross: ${{ matrix.os == 'ubuntu-latest' && matrix.target == 'aarch64-unknown-linux-gnu' }}
 
-      - name: Prepare binary
-        shell: bash
-        run: |
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            cp "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" "${{ matrix.asset_name }}"
-          else
-            cp "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" "${{ matrix.asset_name }}"
-            chmod +x "${{ matrix.asset_name }}"
-          fi
-
       - name: Get tag version
         id: get_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
         shell: bash
+
+      - name: Prepare binary
+        shell: bash
+        run: |
+          # Extract version without the 'v' prefix
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          VERSION_NO_V="${VERSION#v}"
+          
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            # For Windows, add version before the .exe extension
+            FILENAME="${{ matrix.asset_name }}"
+            EXTENSION=".exe"
+            BASENAME="${FILENAME%$EXTENSION}"
+            VERSIONED_NAME="${BASENAME}-${VERSION_NO_V}${EXTENSION}"
+            cp "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" "$VERSIONED_NAME"
+            echo "FINAL_ASSET_NAME=$VERSIONED_NAME" >> $GITHUB_ENV
+          else
+            # For Linux/macOS
+            VERSIONED_NAME="${{ matrix.asset_name }}-${VERSION_NO_V}"
+            cp "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" "$VERSIONED_NAME"
+            chmod +x "$VERSIONED_NAME"
+            echo "FINAL_ASSET_NAME=$VERSIONED_NAME" >> $GITHUB_ENV
+          fi
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -83,6 +96,6 @@ jobs:
           name: ${{ steps.get_version.outputs.VERSION }}
           draft: false
           prerelease: false
-          files: ${{ matrix.asset_name }}
+          files: ${{ env.FINAL_ASSET_NAME }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
