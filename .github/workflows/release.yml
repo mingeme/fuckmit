@@ -48,27 +48,10 @@ jobs:
           target: ${{ matrix.target }}
           override: true
 
-      - name: Install cross-compilation tools
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          sudo dpkg --add-architecture arm64
-          sudo apt-get update
-          sudo apt-get install -y gcc-aarch64-linux-gnu
-          sudo apt-get install -y --no-install-recommends g++-aarch64-linux-gnu libc6-dev-arm64-cross
-          sudo apt-get install -y pkg-config libssl-dev
-          
-          # Use cross instead of direct cross-compilation
-          cargo install cross --git https://github.com/cross-rs/cross
+      - name: Install cross
+        run: cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Build binary
-        if: matrix.target != 'aarch64-unknown-linux-gnu'
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release --target ${{ matrix.target }}
-
-      - name: Build binary (ARM64 Linux)
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
         run: cross build --release --target ${{ matrix.target }}
 
       - name: Prepare binary
