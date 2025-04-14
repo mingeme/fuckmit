@@ -12,6 +12,17 @@ AI-powered git commit message generator implemented in Rust.
 
 ## Installation
 
+### Binary Releases
+
+For Windows, Mac OS(10.12+) or Linux, you can download a binary release [here](https://github.com/mingeme/fuckmit/releases).
+
+### Homebrew
+
+```bash
+brew tap mingeme/tap
+brew install fuckmit
+```
+
 ### From Source
 
 If you have already installed the Rust toolchain (including `cargo`), you can directly use the following command to install from the GitHub repository:
