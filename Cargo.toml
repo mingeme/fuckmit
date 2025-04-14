@@ -4,7 +4,12 @@ version = "0.1.0"
 edition = "2021"
 description = "AI-powered git commit message generator"
 authors = ["mingeme00@outlook.com"]
+keywords = ["git", "commit", "ai", "cli"]
+categories = ["command-line-utilities"]
+repository = "https://github.com/mingeme/fuckmit"
+readme = "README.md"
 license = "MIT"
+include = ["Cargo.lock", "Cargo.toml", "README.md", "/src"]
 
 [dependencies]
 clap = { version = "4.4", features = ["derive"] }
