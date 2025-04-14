@@ -1,8 +1,12 @@
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
 use std::fs;
-use std::os::unix::fs as unix_fs;
 use std::path::{Path, PathBuf};
+
+#[cfg(windows)]
+use std::fs as platform_fs;
+#[cfg(unix)]
+use std::os::unix::fs as platform_fs;
 
 use crate::config::{get_commit_config, CommitConfig};
 
@@ -76,7 +80,7 @@ impl ConfigCommand {
                     }
 
                     // Create the symlink to the default configuration
-                    if let Err(e) = unix_fs::symlink(&target_path, &symlink_path) {
+                    if let Err(e) = Self::create_symlink(&target_path, &symlink_path) {
                         // Only warn about symlink creation failure, don't fail the command
                         eprintln!("Warning: Could not create symlink: {}", e);
                     } else {
@@ -176,7 +180,7 @@ impl ConfigCommand {
                 }
 
                 // Create the symlink
-                match unix_fs::symlink(&source_file, &symlink_path) {
+                match Self::create_symlink(&source_file, &symlink_path) {
                     Ok(_) => {}
                     Err(e) => {
                         return Err(anyhow::anyhow!(
@@ -215,5 +219,22 @@ impl ConfigCommand {
     fn is_config_file(path: &Path) -> bool {
         let file_name = path.file_name().unwrap_or_default().to_string_lossy();
         file_name.ends_with(".fuckmit.yml") || file_name.ends_with(".fuckmit.yaml")
+    }
+
+    /// Create a symlink or copy the file on Windows
+    fn create_symlink(source: &Path, dest: &Path) -> Result<()> {
+        #[cfg(unix)]
+        {
+            platform_fs::symlink(source, dest)
+                .map_err(|e| anyhow::anyhow!("Failed to create symlink: {}", e))
+        }
+
+        #[cfg(windows)]
+        {
+            // On Windows, we'll just copy the file instead of creating a symlink
+            fs::copy(source, dest)
+                .map(|_| ())
+                .map_err(|e| anyhow::anyhow!("Failed to copy file: {}", e))
+        }
     }
 }
