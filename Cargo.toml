@@ -31,6 +31,14 @@ indicatif = "0.17"
 regex = "1.11.1"
 tempfile = "3.8"
 
+[profile.release]
+strip = true
+panic = 'abort'
+incremental = false
+overflow-checks = false
+lto = "fat"
+build-override = { opt-level = 3 }
+
 [dev-dependencies]
 test-case = "3.2"
 assert_cmd = "2.0"
