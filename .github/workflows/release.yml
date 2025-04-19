@@ -19,23 +19,23 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact_name: fuckmit
-            asset_name: fuckmit-linux-amd64
+            asset_name: fuckmit-linux-x86_64
           - os: ubuntu-latest
             target: aarch64-unknown-linux-gnu
             artifact_name: fuckmit
-            asset_name: fuckmit-linux-arm64
+            asset_name: fuckmit-linux-aarch64
           - os: macos-latest
             target: x86_64-apple-darwin
             artifact_name: fuckmit
-            asset_name: fuckmit-macos-amd64
+            asset_name: fuckmit-darwin-x86_64
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact_name: fuckmit
-            asset_name: fuckmit-macos-arm64
+            asset_name: fuckmit-darwin-aarch64
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact_name: fuckmit.exe
-            asset_name: fuckmit-windows-amd64.exe
+            asset_name: fuckmit-windows-x86_64
 
     steps:
       - name: Checkout code
@@ -75,19 +75,19 @@ jobs:
           VERSION_NO_V="${VERSION#v}"
           
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            # For Windows, add version before the .exe extension
-            FILENAME="${{ matrix.asset_name }}"
-            EXTENSION=".exe"
-            BASENAME="${FILENAME%$EXTENSION}"
-            VERSIONED_NAME="${BASENAME}-${VERSION_NO_V}${EXTENSION}"
+            # For Windows
+            VERSIONED_NAME="${{ matrix.asset_name }}-${VERSION_NO_V}.exe"
             cp "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" "$VERSIONED_NAME"
             echo "FINAL_ASSET_NAME=$VERSIONED_NAME" >> $GITHUB_ENV
           else
             # For Linux/macOS
-            VERSIONED_NAME="${{ matrix.asset_name }}-${VERSION_NO_V}"
-            cp "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" "$VERSIONED_NAME"
-            chmod +x "$VERSIONED_NAME"
-            echo "FINAL_ASSET_NAME=$VERSIONED_NAME" >> $GITHUB_ENV
+            # Create tar.gz archive
+            mkdir -p release_pkg
+            cp "target/${{ matrix.target }}/release/${{ matrix.artifact_name }}" release_pkg/fuckmit
+            chmod +x release_pkg/fuckmit
+            ARCHIVE_NAME="${{ matrix.asset_name }}-${VERSION_NO_V}.tar.gz"
+            tar -czf "$ARCHIVE_NAME" -C release_pkg .
+            echo "FINAL_ASSET_NAME=$ARCHIVE_NAME" >> $GITHUB_ENV
           fi
 
       - name: Create Release
