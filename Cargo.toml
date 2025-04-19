@@ -1,6 +1,6 @@
 [package]
 name = "fuckmit"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 description = "AI-powered git commit message generator"
 authors = ["mingeme00@outlook.com"]
