@@ -1,7 +1,11 @@
+pub mod mappings;
+
 use anyhow::{anyhow, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+
+use crate::utils::git_repo::find_git_repo_root;
 
 #[derive(Debug, Deserialize, Serialize, Default)]
 pub struct AuthConfig {
@@ -60,7 +64,10 @@ impl AuthConfig {
         let config_path = Self::get_path()?;
 
         if !config_path.exists() {
-            println!("Auth config file not found, creating default config {}", config_path.display());
+            println!(
+                "Auth config file not found, creating default config {}",
+                config_path.display()
+            );
             let default_config = AuthConfig::default();
             default_config.save()?;
             return Ok(default_config);
@@ -99,8 +106,8 @@ impl AuthConfig {
         }
 
         // Default path
-        let mut path = dirs::config_dir()
-            .ok_or_else(|| anyhow!("Could not determine config directory"))?;
+        let mut path =
+            dirs::config_dir().ok_or_else(|| anyhow!("Could not determine config directory"))?;
 
         path.push("fuckmit");
         path.push("auth.yml");
@@ -190,8 +197,8 @@ pub fn get_config_dir() -> Result<PathBuf> {
     }
 
     // Default path
-    let mut path = dirs::config_dir()
-        .ok_or_else(|| anyhow!("Could not determine config directory"))?;
+    let mut path =
+        dirs::config_dir().ok_or_else(|| anyhow!("Could not determine config directory"))?;
 
     path.push("fuckmit");
     Ok(path)
@@ -203,24 +210,34 @@ pub fn get_commit_config() -> Result<CommitConfig> {
         return Ok(local_config);
     }
 
-    // Fall back to default commit config
-    Ok(CommitConfig::default())
-}
+    // Try to load from mappings.toml based on current directory
+    if let Ok(mappings) = mappings::load() {
+        // Only try to use mappings if there are any defined
+        if !mappings.mappings.is_empty() {
+            // Try to find the current directory in mappings
+            if let Ok(current_dir) = find_git_repo_root(None) {
+                // Convert to canonical path to match how paths are stored in mappings
+                if let Ok(canonical_path) = std::fs::canonicalize(&current_dir) {
+                    let path_str = canonical_path.to_string_lossy().to_string();
 
-fn load_local_commit_config() -> Result<CommitConfig> {
-    // First check for local config files in current directory
-    let local_paths = [".fuckmit.yml", ".fuckmit.yaml"];
+                    // Check if this path is in our mappings
+                    if let Some(config_name) = mappings.mappings.get(&path_str) {
+                        // Found a mapping, try to load the specified config
+                        if let Ok(config_dir) = get_config_dir() {
+                            let config_path =
+                                config_dir.join(format!("{}.fuckmit.yml", config_name));
 
-    for path in local_paths.iter() {
-        let path = Path::new(path);
-        if path.exists() {
-            let config_str =
-                std::fs::read_to_string(path).context("Failed to read local commit config")?;
-
-            let config: CommitConfig =
-                serde_yaml::from_str(&config_str).context("Failed to parse local commit config")?;
-
-            return Ok(config);
+                            // Try to load the mapped configuration
+                            if config_path.exists() {
+                                return load_config_from_file(
+                                    &config_path,
+                                    &format!("mapped configuration '{}'", config_name),
+                                );
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -229,27 +246,47 @@ fn load_local_commit_config() -> Result<CommitConfig> {
         // First check the symlink to the active configuration
         let symlink_path = config_dir.join(".fuckmit.yml");
         if symlink_path.exists() {
-            let config_str = std::fs::read_to_string(&symlink_path)
-                .context("Failed to read active commit config")?;
-
-            let config: CommitConfig = serde_yaml::from_str(&config_str)
-                .context("Failed to parse active commit config")?;
-
-            return Ok(config);
+            return load_config_from_file(&symlink_path, "active commit config");
         }
 
         // If no symlink, check for default configuration
         let default_path = config_dir.join("default.fuckmit.yml");
         if default_path.exists() {
-            let config_str = std::fs::read_to_string(&default_path)
-                .context("Failed to read default commit config")?;
-
-            let config: CommitConfig = serde_yaml::from_str(&config_str)
-                .context("Failed to parse default commit config")?;
-
-            return Ok(config);
+            return load_config_from_file(&default_path, "default commit config");
         }
     }
 
-    Err(anyhow!("Commit config not found"))
+    // Fall back to default commit config
+    Ok(CommitConfig::default())
+}
+
+/// Load a CommitConfig from a file with unified error handling
+fn load_config_from_file(path: &Path, config_type: &str) -> Result<CommitConfig> {
+    let config_str = std::fs::read_to_string(path).context(format!(
+        "Failed to read {}: {}",
+        config_type,
+        path.display()
+    ))?;
+
+    let config: CommitConfig = serde_yaml::from_str(&config_str).context(format!(
+        "Failed to parse {}: {}",
+        config_type,
+        path.display()
+    ))?;
+
+    Ok(config)
+}
+
+fn load_local_commit_config() -> Result<CommitConfig> {
+    // First check for local config files in current directory
+    let local_paths = [".fuckmit.yml", ".fuckmit.yaml"];
+
+    for path in local_paths.iter() {
+        let config_path = std::path::Path::new(path);
+        if config_path.exists() {
+            return load_config_from_file(config_path, "local commit config");
+        }
+    }
+
+    Err(anyhow::anyhow!("No local commit config found"))
 }

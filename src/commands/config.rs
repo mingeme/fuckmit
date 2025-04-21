@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
-use std::fs;
 use std::path::{Path, PathBuf};
 
 #[cfg(windows)]
@@ -8,7 +7,8 @@ use std::fs as platform_fs;
 #[cfg(unix)]
 use std::os::unix::fs as platform_fs;
 
-use crate::config::{get_commit_config, CommitConfig};
+use crate::config::{get_commit_config, mappings, CommitConfig};
+use crate::utils::git_repo::find_git_repo_root;
 
 #[derive(Args)]
 pub struct ConfigCommand {
@@ -36,6 +36,18 @@ enum ConfigSubcommand {
         /// Name of the configuration to use (without .fuckmit.yml extension)
         name: String,
     },
+
+    /// Add a new mapping
+    AddMapping {
+        /// Mapping name
+        name: String,
+
+        /// Mapping value
+        path: Option<String>,
+    },
+
+    /// List all mappings
+    ListMappings,
 }
 
 impl ConfigCommand {
@@ -45,6 +57,8 @@ impl ConfigCommand {
             ConfigSubcommand::Show => Self::handle_show(),
             ConfigSubcommand::List => Self::handle_list(),
             ConfigSubcommand::Use { name } => Self::handle_use(name),
+            ConfigSubcommand::AddMapping { name, path } => Self::handle_add_mapping(name, path),
+            ConfigSubcommand::ListMappings => Self::handle_list_mappings(),
         }?;
         Ok(())
     }
@@ -74,7 +88,7 @@ impl ConfigCommand {
             let config_dir = Self::get_config_dir()?;
             let symlink_path = config_dir.join(".fuckmit.yml");
             if symlink_path.exists() {
-                let _ = fs::remove_file(&symlink_path);
+                let _ = std::fs::remove_file(&symlink_path);
             }
             if let Err(e) = Self::create_symlink(&target_path, &symlink_path) {
                 eprintln!("Warning: Could not create symlink: {}", e);
@@ -93,7 +107,7 @@ impl ConfigCommand {
 
     fn handle_list() -> Result<()> {
         let config_dir = Self::get_config_dir()?;
-        let entries = fs::read_dir(&config_dir).context(format!(
+        let entries = std::fs::read_dir(&config_dir).context(format!(
             "Failed to read config directory: {}",
             config_dir.display()
         ))?;
@@ -107,7 +121,7 @@ impl ConfigCommand {
         }
         let symlink_path = config_dir.join(".fuckmit.yml");
         let active_target = if symlink_path.exists() && symlink_path.is_symlink() {
-            fs::read_link(&symlink_path).ok().map(|p| {
+            std::fs::read_link(&symlink_path).ok().map(|p| {
                 p.file_name()
                     .unwrap_or_default()
                     .to_string_lossy()
@@ -142,7 +156,7 @@ impl ConfigCommand {
 
     fn handle_use(name: &str) -> Result<()> {
         let config_dir = Self::get_config_dir()?;
-        fs::create_dir_all(&config_dir)?;
+        std::fs::create_dir_all(&config_dir)?;
         let source_file = if name.ends_with(".fuckmit.yml") || name.ends_with(".fuckmit.yaml") {
             config_dir.join(name)
         } else {
@@ -153,7 +167,7 @@ impl ConfigCommand {
         }
         let symlink_path = config_dir.join(".fuckmit.yml");
         if symlink_path.exists() {
-            let _ = fs::remove_file(&symlink_path);
+            let _ = std::fs::remove_file(&symlink_path);
         }
         match Self::create_symlink(&source_file, &symlink_path) {
             Ok(_) => {}
@@ -167,6 +181,69 @@ impl ConfigCommand {
             }
         };
         println!("Now using '{}' as the active configuration", name);
+        Ok(())
+    }
+
+    fn handle_add_mapping(name: &str, path: &Option<String>) -> Result<()> {
+        // Get the repository path (either provided or current directory)
+        let repo_path = match path {
+            Some(p) => PathBuf::from(p),
+            None => find_git_repo_root(None)?,
+        };
+
+        // Ensure the path exists and is a directory
+        if !repo_path.exists() || !repo_path.is_dir() {
+            return Err(anyhow::anyhow!(
+                "Path '{}' does not exist or is not a directory",
+                repo_path.display()
+            ));
+        }
+
+        // Ensure the path is a Git repository
+        if !repo_path.join(".git").exists() {
+            return Err(anyhow::anyhow!(
+                "Path '{}' is not a Git repository",
+                repo_path.display()
+            ));
+        }
+
+        // Convert to canonical path to avoid issues with relative paths
+        let repo_path = std::fs::canonicalize(&repo_path).context(format!(
+            "Failed to canonicalize path: {}",
+            repo_path.display()
+        ))?;
+        let repo_path_str = repo_path.to_string_lossy().to_string();
+
+        // Load existing mappings
+        let mut mappings = mappings::load()?;
+
+        // Add or update the mapping
+        mappings
+            .mappings
+            .insert(repo_path_str.clone(), name.to_string());
+
+        // Save the updated mappings
+        mappings::save(&mappings)?;
+
+        println!("Added mapping: '{}' -> '{}'", repo_path_str, name);
+        Ok(())
+    }
+
+    fn handle_list_mappings() -> Result<()> {
+        // Load existing mappings
+        let mappings = mappings::load()?;
+
+        if mappings.mappings.is_empty() {
+            println!("No mappings found. Add one with 'fuckmit config add-mapping <name> [path]'.");
+            return Ok(());
+        }
+
+        println!("Available mappings:\n");
+
+        for (path, name) in &mappings.mappings {
+            println!("  '{}' -> '{}'", path, name);
+        }
+
         Ok(())
     }
 
@@ -203,7 +280,7 @@ impl ConfigCommand {
         #[cfg(windows)]
         {
             // On Windows, we'll just copy the file instead of creating a symlink
-            fs::copy(source, dest)
+            platform_fs::copy(source, dest)
                 .map(|_| ())
                 .map_err(|e| anyhow::anyhow!("Failed to copy file: {}", e))
         }
