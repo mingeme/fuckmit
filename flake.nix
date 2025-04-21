@@ -46,7 +46,7 @@
           fuckmit-from-source = pkgs.rustPlatform.buildRustPackage {
             pname = "fuckmit";
             version = version;
-            src = ./.;
+            src = pkgs.lib.cleanSource ./.;
             cargoLock = {
               lockFile = ./Cargo.lock;
             };
