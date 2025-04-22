@@ -78,6 +78,10 @@ fuckmit config init --global  # Create a default commit configuration in global 
 fuckmit config show        # Show current commit configuration
 fuckmit config list        # List all commit configurations
 fuckmit config use <config>  # Set the current commit configuration
+
+# Repository-to-configuration mappings
+fuckmit config add-mapping <config> [path]  # Map a Git repository to a specific configuration
+fuckmit config list-mappings              # List all repository-to-configuration mappings
 ```
 
 ## Customizing Commit Messages
@@ -103,6 +107,23 @@ exclude:
 ```
 
 The `{{diff}}` placeholder will be replaced with the actual git diff content.
+
+### Repository-to-Configuration Mappings
+
+You can map specific Git repositories to specific configuration, allowing you to use different commit message styles for different projects without manually switching configurations.
+
+```bash
+# Map the current Git repository to a specific configuration
+fuckmit config add-mapping <config>
+
+# Map a specific Git repository path to a configuration
+fuckmit config add-mapping <config> <repository-path>
+
+# List all repository-to-configuration mappings
+fuckmit config list-mappings
+```
+
+When you run `fuckmit` in a mapped repository, it will automatically use the associated configuration without requiring any manual configuration switching.
 
 ## Zsh Plugin
 
