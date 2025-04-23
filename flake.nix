@@ -19,7 +19,7 @@
       ...
     }:
     let
-      version = "0.2.0";
+      version = "0.2.1";
       description = "AI-powered git commit message generator";
       homepage = "https://github.com/mingeme/fuckmit";
       license = nixpkgs.lib.licenses.mit;
@@ -97,10 +97,10 @@
                 baseUrl = "https://github.com/mingeme/fuckmit/releases/download/v${version}";
 
                 hashes = {
-                  "darwin-aarch64" = "18ibv7hm41x5jwdgamiil2sg7m55dz4nrplk2r8i2cgjy2pwidbg";
-                  "darwin-x86_64" = "0d0mrqpqqp796kgxcd6m8a420wfh3a5b993yb7z6281g9pfbcfz7";
-                  "linux-aarch64" = "0swa73lb8dvgln09qr2755ibvz3ymxr854kv4n0nlgzj1syp688s";
-                  "linux-x86_64" = "0c85i1kji2csx7dp6sdrlav0bla4bj605lczml62i44hwa810dl1";
+                  "darwin-aarch64" = "0akgs63zbildxpdk21aj7hbkxxrlkawzhdf5mwchrqymhphqp6l6";
+                  "darwin-x86_64" = "16gqqlzf6iykypkckvn3dy87dihs1li7i9bgwhaiq9mh79sz41c1";
+                  "linux-aarch64" = "02inpj3adbr6qdwf0c33zy57cniqz2bp839fid7h1nw2nd7rq5i2";
+                  "linux-x86_64" = "1f724gzm8k6qa69g9ncy40h39pk1lz2cwlaf9hqiqq1qlcmrk8km";
                 };
 
                 arch =
