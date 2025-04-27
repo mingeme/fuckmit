@@ -60,21 +60,23 @@ impl CommitConfig {
 }
 
 impl AuthConfig {
+    /// Load auth config from the default path
     pub fn load() -> Result<Self> {
         let config_path = Self::get_path()?;
+        Self::load_from_path(&config_path)
+    }
 
+    /// Load auth config from a custom path
+    pub fn load_from_path(config_path: &Path) -> Result<Self> {
         if !config_path.exists() {
-            println!(
-                "Auth config file not found, creating default config {}",
+            return Err(anyhow!(
+                "Config file not found at {}",
                 config_path.display()
-            );
-            let default_config = AuthConfig::default();
-            default_config.save()?;
-            return Ok(default_config);
+            ));
         }
 
         let config_str =
-            std::fs::read_to_string(&config_path).context("Failed to read config file")?;
+            std::fs::read_to_string(config_path).context("Failed to read config file")?;
 
         let config: AuthConfig =
             serde_yaml::from_str(&config_str).context("Failed to parse config file")?;

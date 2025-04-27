@@ -1,20 +1,26 @@
-use anyhow::{Context, Result, anyhow};
+use anyhow::{anyhow, Context, Result};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::process::Command;
 
 use crate::config::AuthConfig;
-use crate::providers::get_provider;
+use crate::providers::get_provider_with_config;
 use crate::utils::git;
 
-pub async fn generate_commit(dry_run: bool, amend: bool, add_all: bool) -> Result<()> {
+pub async fn generate_commit(
+    dry_run: bool,
+    amend: bool,
+    add_all: bool,
+    config_path: Option<&str>,
+) -> Result<()> {
     // Get the current directory as the repo path
-    let repo_path = std::env::current_dir()
-        .context("Failed to get current directory")?;
-    
+    let repo_path = std::env::current_dir().context("Failed to get current directory")?;
+
     // Check if we're in a git repository
     let git_dir = repo_path.join(".git");
     if !git_dir.exists() {
-        return Err(anyhow!("Failed to open git repository. Make sure you're in a git repository."));
+        return Err(anyhow!(
+            "Failed to open git repository. Make sure you're in a git repository."
+        ));
     }
 
     // If add_all is true, add all untracked and modified files to the staging area
@@ -83,12 +89,19 @@ pub async fn generate_commit(dry_run: bool, amend: bool, add_all: bool) -> Resul
         diff
     };
 
-    // Load config
-    let config = AuthConfig::load()?;
+    // Load config from custom path if provided, otherwise use default path
+    let config = match config_path {
+        Some(path) => {
+            let path = std::path::PathBuf::from(path);
+            AuthConfig::load_from_path(&path)?
+        }
+        None => AuthConfig::load()?,
+    };
+
     let active_provider = config.get_active_provider()?;
 
-    // Get the provider
-    let provider = get_provider(&active_provider)?;
+    // Get the provider using the loaded config
+    let provider = get_provider_with_config(&active_provider, &config)?;
 
     // Generate commit message with a dynamic loading indicator
     let spinner = ProgressBar::new_spinner();

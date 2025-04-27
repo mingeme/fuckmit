@@ -19,6 +19,10 @@ pub struct Cli {
     /// Add all untracked and modified files before generating commit
     #[arg(short, long)]
     add_all: bool,
+
+    /// Path to a custom auth.yaml configuration file
+    #[arg(short = 'c', long = "auth-config")]
+    config: Option<String>,
 }
 
 impl Cli {
@@ -30,7 +34,8 @@ impl Cli {
                 let dry_run = self.dry_run;
                 let amend = self.amend;
                 let add_all = self.add_all;
-                generate::generate_commit(dry_run, amend, add_all).await?
+                let config_path = self.config.as_deref();
+                generate::generate_commit(dry_run, amend, add_all, config_path).await?
             }
         }
         

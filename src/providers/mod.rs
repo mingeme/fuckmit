@@ -15,6 +15,10 @@ pub trait Provider {
 
 pub fn get_provider(provider_name: &str) -> Result<Box<dyn Provider>> {
     let config = AuthConfig::load()?;
+    get_provider_with_config(provider_name, &config)
+}
+
+pub fn get_provider_with_config(provider_name: &str, config: &AuthConfig) -> Result<Box<dyn Provider>> {
     let provider_config = config.get_provider_config(provider_name)?;
 
     match provider_name {
