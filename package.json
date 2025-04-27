@@ -1,0 +1,27 @@
+{
+  "name": "fuckmit",
+  "version": "0.2.1",
+  "description": "Fuckmit CLI",
+  "repository": "mingeme/fuckmit",
+  "homepage": "https://github.com/mingeme/fuckmit#readme",
+  "license": "MIT",
+  "author": "mingeme",
+  "type": "module",
+  "files": [
+    "scripts/install.js"
+  ],
+  "bin": {
+    "fuckmit": "bin/fuckmit"
+  },
+  "scripts": {
+    "postinstall": "node scripts/install.js"
+  },
+  "bugs": {
+    "url": "https://github.com/mingeme/fuckmit/issues"
+  },
+  "dependencies": {
+    "bin-links": "^5.0.0",
+    "node-fetch": "^3.3.2",
+    "tar": "^7.4.3"
+  }
+}
