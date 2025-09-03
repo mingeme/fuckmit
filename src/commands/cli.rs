@@ -1,66 +1,41 @@
-use clap::{command, Parser, Subcommand};
-
-use super::{auth, completion, config, generate};
+use clap::Parser;
 
 #[derive(Parser)]
-#[command(author, version, about, long_about = None)]
+#[command(name = "fuckmit")]
+#[command(about = "AI-powered git commit message generator")]
+#[command(version)]
 pub struct Cli {
-    #[command(subcommand)]
-    command: Option<Commands>,
-
-    /// Generate a commit message without creating a commit
+    /// Show the generated message without committing
     #[arg(short, long)]
-    dry_run: bool,
+    pub dry_run: bool,
 
-    /// Amend the last commit with a new message
-    #[arg(short = 'A', long)]
-    amend: bool,
-
-    /// Add all untracked and modified files before generating commit
+    /// Specify which AI model to use (openai, azure, deepseek, qwen) or provider/model format (e.g., openai/gpt-4)
     #[arg(short, long)]
-    add_all: bool,
+    pub model: Option<String>,
 
-    /// Path to a custom auth.yaml configuration file
-    #[arg(short = 'c', long = "auth-config")]
-    config: Option<String>,
+    /// Additional rules for commit message generation
+    #[arg(short, long)]
+    pub rules: Option<String>,
+
+    /// Additional context for the changes
+    #[arg(short, long)]
+    pub context: Option<String>,
+
+    /// Maximum number of tokens for the generated message
+    #[arg(long, default_value = "8192")]
+    pub max_tokens: u32,
+
+    /// Temperature for AI generation (0.0 to 2.0)
+    #[arg(long, default_value = "0.7")]
+    pub temperature: f32,
 }
 
 impl Cli {
     pub async fn execute(&self) -> anyhow::Result<()> {
-        match &self.command {
-            Some(command) => command.execute().await?,
-            None => {
-                // Default behavior: generate commit message
-                let dry_run = self.dry_run;
-                let amend = self.amend;
-                let add_all = self.add_all;
-                let config_path = self.config.as_deref();
-                generate::generate_commit(dry_run, amend, add_all, config_path).await?
-            }
-        }
-        
-        Ok(())
-    }
-}
+        // Import the generate module
+        use super::generate;
 
-#[derive(Subcommand)]
-pub enum Commands {
-    /// Authentication commands
-    Auth(auth::AuthCommand),
-
-    /// Generate shell completions
-    Completion(completion::CompletionCommand),
-
-    /// Configuration commands
-    Config(config::ConfigCommand),
-}
-
-impl Commands {
-    pub async fn execute(&self) -> anyhow::Result<()> {
-        match self {
-            Commands::Auth(cmd) => cmd.execute().await,
-            Commands::Completion(cmd) => cmd.execute().await,
-            Commands::Config(cmd) => cmd.execute().await,
-        }
+        // Execute the generate command with the provided options
+        generate::generate_commit(self).await
     }
 }

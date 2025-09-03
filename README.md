@@ -1,20 +1,12 @@
-# fuckmit
+# Fuckmit - AI 智能 Git 提交信息生成器
 
-AI-powered git commit message generator implemented in Rust.
+一个 Rust 编写的命令行工具，通过集成多种 AI 提供商（OpenAI、Azure OpenAI、DeepSeek、Qwen 等），自动分析代码变更并生成符合规范的 Git 提交信息。
 
-## Features
+## 安装
 
-- Generate commit messages using AI based on your staged changes
-- Support for multiple AI providers (OpenAI, Anthropic, Qwen)
-- Customizable prompts for generating commit messages
-- Exclude specific files from the diff (e.g., package-lock.json)
-- Dry-run mode to preview commit messages without creating a commit
+### 二进制发布版
 
-## Installation
-
-### Binary Releases
-
-For Windows, Mac OS(10.12+) or Linux, you can download a binary release [here](https://github.com/mingeme/fuckmit/releases).
+适用于 Windows、Mac OS(10.12+) 或 Linux，您可以在 [这里](https://github.com/mingeme/fuckmit/releases) 下载二进制发布版。
 
 ### Homebrew
 
@@ -23,127 +15,124 @@ brew tap mingeme/tap
 brew install fuckmit
 ```
 
-### From crates.io
+### 从 crates.io 安装
 
 ```bash
 cargo install fuckmit
 ```
 
-### From Source
+### 从源码安装
 
-If you have already installed the Rust toolchain (including `cargo`), you can directly use the following command to install from the GitHub repository:
+如果您已安装 Rust 工具链（包括 cargo），可以直接使用以下命令从 GitHub 仓库安装：
 
 ```bash
 cargo install --locked --git https://github.com/mingeme/fuckmit
 ```
 
-Or manually clone and build:
+或者手动克隆并构建：
 
 ```bash
-# Clone the repository
+# 克隆仓库
 git clone https://github.com/mingeme/fuckmit.git
 cd fuckmit
 
-# Build the project
+# 构建项目
 cargo build --release
 
-# Install the binary
+# 安装二进制文件
 cargo install --path .
 ```
 
-## Usage
+## 支持的 AI 提供商
+
+| 提供商       | 状态 | 支持的模型         |
+| ------------ | ---- | ------------------ |
+| OpenAI       | ✅   | GPT-3.5, GPT-4, 等 |
+| Azure OpenAI | ✅   | GPT-3.5, GPT-4, 等 |
+| DeepSeek     | ✅   | DeepSeek Chat      |
+| Qwen         | ✅   | Qwen Turbo, 等     |
+
+## 环境配置
+
+### 环境变量配置
+
+#### OpenAI
 
 ```bash
-# Show help
-fuckmit --help
+export OPENAI_API_KEY="your-openai-api-key"
+export OPENAI_MODEL="gpt-4"  # 可选，默认为 gpt-3.5-turbo
+export OPENAI_BASE_URL="https://api.openai.com/v1"  # 可选
+```
 
-# Generate a commit message and create a commit
+#### Azure OpenAI
+
+```bash
+export AZURE_OPENAI_API_KEY="your-azure-api-key"
+export AZURE_OPENAI_ENDPOINT="https://your-resource.openai.azure.com"
+export AZURE_OPENAI_DEPLOYMENT="your-deployment-name"
+export AZURE_OPENAI_API_VERSION="2024-02-15-preview"  # 可选
+```
+
+#### DeepSeek
+
+```bash
+export DEEPSEEK_API_KEY="your-deepseek-api-key"
+export DEEPSEEK_MODEL="deepseek-chat"  # 可选
+export DEEPSEEK_BASE_URL="https://api.deepseek.com/v1"  # 可选
+```
+
+#### Qwen
+
+```bash
+export QWEN_API_KEY="your-qwen-api-key"
+export QWEN_MODEL="qwen-turbo"  # 可选
+export QWEN_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"  # 可选
+```
+
+#### 全局设置
+
+```bash
+export LLM_MODEL="deepseek/deepseek-chat"  # 必选
+export LLM_TIMEOUT_SECONDS="30"  # 可选，超时设置
+export LLM_MAX_RETRIES="3"  # 可选，重试次数
+```
+
+## 使用方法
+
+### 基本用法
+
+```bash
+# 生成并提交 Git 提交信息
 fuckmit
 
-# Generate a commit message without creating a commit (dry-run mode)
+# 仅显示生成的提交信息，不实际提交
 fuckmit --dry-run
-# or
-fuckmit -d
 
-# Authenticate with a provider
-fuckmit auth add <provider> <apiKey>
-# or
-fuckmit auth use <provider>
-# or set specific provider properties
-fuckmit auth set <provider>.<model/api_key/endpoint> <value>
+# 使用提供商/模型格式
+fuckmit --model openai/gpt-4
 
-# Manage commit configurations
-fuckmit config init        # Create a default commit configuration in current directory
-fuckmit config init --global  # Create a default commit configuration in global config directory
-fuckmit config show        # Show current commit configuration
-fuckmit config list        # List all commit configurations
-fuckmit config use <config>  # Set the current commit configuration
+# 添加自定义规则
+fuckmit --rules "使用中文提交信息"
 
-# Repository-to-configuration mappings
-fuckmit config add-mapping <config> [path]  # Map a Git repository to a specific configuration
-fuckmit config list-mappings              # List all repository-to-configuration mappings
+# 添加变更上下文
+fuckmit --context "修复了用户登录的bug"
+
+# 同时使用规则和上下文
+fuckmit --rules "使用简洁的描述" --context "重构了数据库连接逻辑"
+
+# 自定义 AI 参数
+fuckmit --max-tokens 1000 --temperature 0.5
 ```
 
-## Customizing Commit Messages
+### 命令行参数
 
-You can customize the prompts used for generating commit messages by creating a `.fuckmit.yml` or `.fuckmit.yaml` file either in your current working directory or in the global config directory (Linux: `~/.config/fuckmit/` or MacOS: `~/Library/Application Support/fuckmit/` or Windows: `C:\Users\<username>\AppData\Roaming\fuckmit` or `FUCKMIT_CONFIG_DIR` environment variable).
+- `-d, --dry-run`: 仅显示生成的提交信息，不执行提交
+- `-m, --model <MODEL>`: 指定 AI 模型或使用 "provider/model" 格式
+- `-r, --rules <RULES>`: 自定义提交信息生成规则
+- `-c, --context <CONTEXT>`: 提供变更的额外上下文信息
+- `--max-tokens <NUM>`: 生成消息的最大令牌数（默认：8192）
+- `--temperature <NUM>`: AI 生成的温度参数，范围 0.0-2.0（默认：0.7）
 
-The file should have the following format:
+## 许可证
 
-```yaml
-prompt:
-  system: |
-    Your custom system prompt here
-  user: |
-    Your custom user prompt template here
-
-    {{diff}}
-
-# Optional: exclude specific files from the diff
-exclude:
-  - "package-lock.json"
-  - "**/node_modules/**"
-  - "dist/**"
-```
-
-The `{{diff}}` placeholder will be replaced with the actual git diff content.
-
-### Repository-to-Configuration Mappings
-
-You can map specific Git repositories to specific configuration, allowing you to use different commit message styles for different projects without manually switching configurations.
-
-```bash
-# Map the current Git repository to a specific configuration
-fuckmit config add-mapping <config>
-
-# Map a specific Git repository path to a configuration
-fuckmit config add-mapping <config> <repository-path>
-
-# List all repository-to-configuration mappings
-fuckmit config list-mappings
-```
-
-When you run `fuckmit` in a mapped repository, it will automatically use the associated configuration without requiring any manual configuration switching.
-
-## Zsh Plugin
-
-A Zsh plugin is available to provide convenient aliases and functions for `fuckmit`.
-
-See the [plugin](https://github.com/mingeme/fuckmit-zsh) for more details and other installation methods.
-
-## Development
-
-```bash
-# Run tests
-cargo test
-
-# Build the project
-cargo build
-
-# Run in development mode
-cargo run -- --help
-```
-
-## License
-
-MIT
+本项目基于 MIT 许可证开源 - 详见 [LICENSE](LICENSE) 文件。

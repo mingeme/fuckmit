@@ -1,139 +1,183 @@
-use anyhow::{anyhow, Context, Result};
-use indicatif::{ProgressBar, ProgressStyle};
+use crate::commands::cli::Cli;
+use crate::{gateway::LLMGateway, providers::ProviderType, types::ChatMessage};
+use anyhow::{Context, Result};
 use std::process::Command;
+use std::str::FromStr;
 
-use crate::config::AuthConfig;
-use crate::providers::get_provider_with_config;
-use crate::utils::git;
+/// Generate a commit message using AI
+pub async fn generate_commit(cli: &Cli) -> Result<()> {
+    // Get git diff
+    let diff = get_git_diff()?;
+    if diff.trim().is_empty() {
+        println!("No changes detected. Please stage some changes first.");
+        return Ok(());
+    }
 
-pub async fn generate_commit(
-    dry_run: bool,
-    amend: bool,
-    add_all: bool,
-    config_path: Option<&str>,
-) -> Result<()> {
-    // Get the current directory as the repo path
-    let repo_path = std::env::current_dir().context("Failed to get current directory")?;
+    // Initialize the LLM gateway
+    let gateway = LLMGateway::from_env()
+        .await
+        .context("Failed to initialize LLM gateway. Please check your environment variables.")?;
 
-    // Check if we're in a git repository
-    let git_dir = repo_path.join(".git");
-    if !git_dir.exists() {
-        return Err(anyhow!(
-            "Failed to open git repository. Make sure you're in a git repository."
+    // Determine which provider to use and model
+    let (provider_type, _model_override) = if let Some(provider_str) = &cli.model {
+        // Check if it's in provider/model format
+        let parts: Vec<&str> = provider_str.split('/').collect();
+        if parts.len() == 2 {
+            let provider = ProviderType::from_str(parts[0])
+                .map_err(|_| anyhow::anyhow!("Invalid provider: {}", parts[0]))?;
+            let model = parts[1].to_string();
+            (provider, Some(model))
+        } else {
+            let provider = ProviderType::from_str(provider_str)
+                .map_err(|_| anyhow::anyhow!("Invalid provider: {}", provider_str))?;
+            (provider, None)
+        }
+    } else {
+        (gateway.default_provider(), None)
+    };
+
+    // Check if the specified provider is available
+    if !gateway.has_provider(&provider_type) {
+        return Err(anyhow::anyhow!(
+            "Provider {:?} is not configured. Available providers: {:?}",
+            provider_type,
+            gateway.available_providers()
         ));
     }
 
-    // If add_all is true, add all untracked and modified files to the staging area
-    if add_all {
-        let output = Command::new("git")
-            .current_dir(&repo_path)
-            .args(["add", "."])
-            .output()
-            .context("Failed to execute git add command")?;
+    // Create the prompt for commit message generation
+    let system_prompt = create_system_prompt(cli.rules.as_deref());
+    let user_prompt = create_user_prompt(&diff, cli.context.as_deref());
 
-        if !output.status.success() {
-            let error = String::from_utf8_lossy(&output.stderr);
-            return Err(anyhow!("Failed to add files: {}", error));
+    let messages = vec![
+        ChatMessage::system(system_prompt),
+        ChatMessage::user(user_prompt),
+    ];
+
+    println!("Generating commit message using {:?}...", provider_type);
+
+    // Generate the commit message using gateway's unified method
+    let response = gateway
+        .chat_with_options(
+            messages,
+            Some(provider_type),
+            _model_override,
+            Some(cli.max_tokens),
+            Some(cli.temperature),
+        )
+        .await
+        .context("Failed to generate commit message")?;
+
+    let commit_message = response
+        .content()
+        .ok_or_else(|| anyhow::anyhow!("No content in response"))?
+        .trim()
+        .to_string();
+
+    if cli.dry_run {
+        println!("Generated commit message (dry run):");
+        println!("---");
+        println!("{}", commit_message);
+        println!("---");
+    } else {
+        // Create the actual commit
+        create_commit(&commit_message)?;
+        println!("Commit created successfully:");
+        println!("{}", commit_message);
+    }
+
+    Ok(())
+}
+
+/// Get the git diff for staged changes
+fn get_git_diff() -> Result<String> {
+    let output = Command::new("git")
+        .args(["diff", "--cached"])
+        .output()
+        .context("Failed to execute git diff command")?;
+
+    if !output.status.success() {
+        return Err(anyhow::anyhow!(
+            "Git diff failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    let diff = String::from_utf8(output.stdout).context("Git diff output is not valid UTF-8")?;
+
+    // If no staged changes, try to get unstaged changes
+    if diff.trim().is_empty() {
+        let output = Command::new("git")
+            .args(["diff"])
+            .output()
+            .context("Failed to execute git diff command for unstaged changes")?;
+
+        if output.status.success() {
+            let unstaged_diff =
+                String::from_utf8(output.stdout).context("Git diff output is not valid UTF-8")?;
+
+            if !unstaged_diff.trim().is_empty() {
+                println!("No staged changes found. Showing unstaged changes:");
+                println!("Tip: Use 'git add' to stage changes before generating commit message.");
+                return Ok(unstaged_diff);
+            }
         }
     }
 
-    // If amend is true, we want to amend the last commit with a new message
-    // Otherwise, check if there are staged changes
-    if amend {
-        // Check if there's a HEAD commit to amend
-        let output = Command::new("git")
-            .current_dir(&repo_path)
-            .args(["rev-parse", "HEAD"])
-            .output()
-            .context("Failed to check for HEAD commit")?;
+    Ok(diff)
+}
 
-        if !output.status.success() {
-            return Err(anyhow!("No commits found to amend message for"));
-        }
-    } else {
-        // Check if there are staged changes
-        let output = Command::new("git")
-            .current_dir(&repo_path)
-            .args(["diff", "--cached", "--quiet"])
-            .status()
-            .context("Failed to check for staged changes")?;
+/// Create the system prompt for commit message generation
+fn create_system_prompt(additional_rules: Option<&str>) -> String {
+    let mut prompt = r#"You are an expert at writing clear, concise git commit messages following conventional commit format.
 
-        // Exit code 1 means there are changes, 0 means no changes
-        if output.success() {
-            return Err(anyhow!(
-                "No staged changes found. Stage your changes with 'git add' first."
-            ));
-        }
+Rules for commit messages:
+1. Use conventional commit format: type(scope): description
+2. Types: feat, fix, docs, style, refactor, test, chore, perf, ci, build
+3. Keep the first line under 50 characters
+4. Use imperative mood (e.g., "add" not "added" or "adds")
+5. Don't end the subject line with a period
+6. If needed, add a blank line and more detailed explanation
+7. Don't output in markdown format
+
+Examples:
+- feat: add user authentication system
+- fix: resolve memory leak in data processing
+- docs: update API documentation for v2.0
+- refactor: simplify error handling logic"#.to_string();
+
+    if let Some(rules) = additional_rules {
+        prompt.push_str(&format!("\n\nAdditional rules:\n{}", rules));
     }
 
-    // Get the diff - for amend, include both last commit diff and any staged changes
-    // For normal commit, just get staged changes
-    let diff = if amend {
-        // Get the diff from the last commit
-        let last_commit_diff = git::get_last_commit_diff(&repo_path)?;
+    prompt.push_str("\n\nGenerate a commit message based on the provided git diff.");
+    prompt
+}
 
-        // Also check if there are any staged changes to include
-        let staged_diff = git::get_staged_diff(&repo_path)?;
+/// Create the user prompt with git diff and optional context
+fn create_user_prompt(diff: &str, additional_context: Option<&str>) -> String {
+    let mut prompt = String::from("Please generate a commit message for the following changes:");
 
-        // Combine both diffs if there are staged changes
-        if !staged_diff.is_empty() {
-            format!("{last_commit_diff}\n\n--- STAGED CHANGES ---\n\n{staged_diff}")
-        } else {
-            last_commit_diff
-        }
-    } else {
-        let diff = git::get_staged_diff(&repo_path)?;
-        if diff.is_empty() {
-            return Err(anyhow!("No changes to commit"));
-        }
-        diff
-    };
+    if let Some(context) = additional_context {
+        prompt.push_str(&format!("\n\nAdditional context about these changes:\n{}", context));
+    }
 
-    // Load config from custom path if provided, otherwise use default path
-    let config = match config_path {
-        Some(path) => {
-            let path = std::path::PathBuf::from(path);
-            AuthConfig::load_from_path(&path)?
-        }
-        None => AuthConfig::load()?,
-    };
+    prompt.push_str(&format!("\n\n```diff\n{}\n```", diff));
+    prompt
+}
 
-    let active_provider = config.get_active_provider()?;
+/// Create a git commit with the generated message
+fn create_commit(message: &str) -> Result<()> {
+    let output = Command::new("git")
+        .args(["commit", "-m", message])
+        .output()
+        .context("Failed to execute git commit command")?;
 
-    // Get the provider using the loaded config
-    let provider = get_provider_with_config(&active_provider, &config)?;
-
-    // Generate commit message with a dynamic loading indicator
-    let spinner = ProgressBar::new_spinner();
-    spinner.set_style(
-        ProgressStyle::default_spinner()
-            .tick_strings(&["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"])
-            .template("{spinner} Generating commit message...")
-            .unwrap(),
-    );
-    spinner.enable_steady_tick(std::time::Duration::from_millis(100));
-
-    let commit_message = provider.generate_commit_message(&diff).await?;
-
-    // Clear the spinner when done
-    spinner.finish_and_clear();
-
-    // Print the generated message
-    println!("{}\n", commit_message);
-
-    // Create or amend commit if not in dry-run mode
-    if !dry_run {
-        if amend {
-            git::amend_commit(&repo_path, &commit_message)?;
-            println!("Commit amended successfully");
-        } else {
-            git::create_commit(&repo_path, &commit_message)?;
-            println!("Commit created successfully");
-        }
-    } else if amend {
-        println!("Dry run mode - no commit amended");
-    } else {
-        println!("Dry run mode - no commit created");
+    if !output.status.success() {
+        return Err(anyhow::anyhow!(
+            "Git commit failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
     }
 
     Ok(())
