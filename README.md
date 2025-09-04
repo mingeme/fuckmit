@@ -1,12 +1,14 @@
-# Fuckmit - AI 智能 Git 提交信息生成器
+# Fuckmit - AI-Powered Git Commit Message Generator
 
-一个 Rust 编写的命令行工具，通过集成多种 AI 提供商（OpenAI、Azure OpenAI、DeepSeek、Qwen 等），自动分析代码变更并生成符合规范的 Git 提交信息。
+*Read this in other languages: [简体中文](README.zh-CN.md)*
 
-## 安装
+A command-line tool written in Rust that automatically analyzes code changes and generates standardized Git commit messages by integrating with various AI providers (OpenAI, Azure OpenAI, DeepSeek, Qwen, etc.).
 
-### 二进制发布版
+## Installation
 
-适用于 Windows、Mac OS(10.12+) 或 Linux，您可以在 [这里](https://github.com/mingeme/fuckmit/releases) 下载二进制发布版。
+### Binary Releases
+
+For Windows, Mac OS (10.12+) or Linux, you can download binary releases [here](https://github.com/mingeme/fuckmit/releases).
 
 ### Homebrew
 
@@ -15,53 +17,53 @@ brew tap mingeme/tap
 brew install fuckmit
 ```
 
-### 从 crates.io 安装
+### Install from crates.io
 
 ```bash
 cargo install fuckmit
 ```
 
-### 从源码安装
+### Install from Source
 
-如果您已安装 Rust 工具链（包括 cargo），可以直接使用以下命令从 GitHub 仓库安装：
+If you have the Rust toolchain installed (including cargo), you can install directly from the GitHub repository:
 
 ```bash
 cargo install --locked --git https://github.com/mingeme/fuckmit
 ```
 
-或者手动克隆并构建：
+Or clone and build manually:
 
 ```bash
-# 克隆仓库
+# Clone repository
 git clone https://github.com/mingeme/fuckmit.git
 cd fuckmit
 
-# 构建项目
+# Build project
 cargo build --release
 
-# 安装二进制文件
+# Install binary
 cargo install --path .
 ```
 
-## 支持的 AI 提供商
+## Supported AI Providers
 
-| 提供商       | 状态 | 支持的模型         |
-| ------------ | ---- | ------------------ |
-| OpenAI       | ✅   | GPT-3.5, GPT-4, 等 |
-| Azure OpenAI | ✅   | GPT-3.5, GPT-4, 等 |
-| DeepSeek     | ✅   | DeepSeek Chat      |
-| Qwen         | ✅   | Qwen Turbo, 等     |
+| Provider     | Status | Supported Models   |
+| ------------ | ------ | ------------------ |
+| OpenAI       | ✅     | GPT-3.5, GPT-4, etc |
+| Azure OpenAI | ✅     | GPT-3.5, GPT-4, etc |
+| DeepSeek     | ✅     | DeepSeek Chat      |
+| Qwen         | ✅     | Qwen Turbo, etc    |
 
-## 环境配置
+## Environment Configuration
 
-### 环境变量配置
+### Environment Variables
 
 #### OpenAI
 
 ```bash
 export OPENAI_API_KEY="your-openai-api-key"
-export OPENAI_MODEL="gpt-4"  # 可选，默认为 gpt-3.5-turbo
-export OPENAI_BASE_URL="https://api.openai.com/v1"  # 可选
+export OPENAI_MODEL="gpt-4"  # Optional, defaults to gpt-3.5-turbo
+export OPENAI_BASE_URL="https://api.openai.com/v1"  # Optional
 ```
 
 #### Azure OpenAI
@@ -70,69 +72,69 @@ export OPENAI_BASE_URL="https://api.openai.com/v1"  # 可选
 export AZURE_OPENAI_API_KEY="your-azure-api-key"
 export AZURE_OPENAI_ENDPOINT="https://your-resource.openai.azure.com"
 export AZURE_OPENAI_DEPLOYMENT="your-deployment-name"
-export AZURE_OPENAI_API_VERSION="2024-02-15-preview"  # 可选
+export AZURE_OPENAI_API_VERSION="2024-02-15-preview"  # Optional
 ```
 
 #### DeepSeek
 
 ```bash
 export DEEPSEEK_API_KEY="your-deepseek-api-key"
-export DEEPSEEK_MODEL="deepseek-chat"  # 可选
-export DEEPSEEK_BASE_URL="https://api.deepseek.com/v1"  # 可选
+export DEEPSEEK_MODEL="deepseek-chat"  # Optional
+export DEEPSEEK_BASE_URL="https://api.deepseek.com/v1"  # Optional
 ```
 
 #### Qwen
 
 ```bash
 export QWEN_API_KEY="your-qwen-api-key"
-export QWEN_MODEL="qwen-turbo"  # 可选
-export QWEN_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"  # 可选
+export QWEN_MODEL="qwen-turbo"  # Optional
+export QWEN_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"  # Optional
 ```
 
-#### 全局设置
+#### Global Settings
 
 ```bash
-export LLM_MODEL="deepseek/deepseek-chat"  # 必选
-export LLM_TIMEOUT_SECONDS="30"  # 可选，超时设置
-export LLM_MAX_RETRIES="3"  # 可选，重试次数
+export LLM_MODEL="deepseek/deepseek-chat"  # Required
+export LLM_TIMEOUT_SECONDS="30"  # Optional, timeout setting
+export LLM_MAX_RETRIES="3"  # Optional, retry count
 ```
 
-## 使用方法
+## Usage
 
-### 基本用法
+### Basic Usage
 
 ```bash
-# 生成并提交 Git 提交信息
+# Generate and commit Git commit message
 fuckmit
 
-# 仅显示生成的提交信息，不实际提交
+# Only display generated commit message, don't actually commit
 fuckmit --dry-run
 
-# 使用提供商/模型格式
+# Use provider/model format
 fuckmit --model openai/gpt-4
 
-# 添加自定义规则
-fuckmit --rules "使用中文提交信息"
+# Add custom rules
+fuckmit --rules "Use English commit messages"
 
-# 添加变更上下文
-fuckmit --context "修复了用户登录的bug"
+# Add change context
+fuckmit --context "Fixed user login bug"
 
-# 同时使用规则和上下文
-fuckmit --rules "使用简洁的描述" --context "重构了数据库连接逻辑"
+# Use rules and context together
+fuckmit --rules "Use concise descriptions" --context "Refactored database connection logic"
 
-# 自定义 AI 参数
+# Custom AI parameters
 fuckmit --max-tokens 1000 --temperature 0.5
 ```
 
-### 命令行参数
+### Command Line Arguments
 
-- `-d, --dry-run`: 仅显示生成的提交信息，不执行提交
-- `-m, --model <MODEL>`: 指定 AI 模型或使用 "provider/model" 格式
-- `-r, --rules <RULES>`: 自定义提交信息生成规则
-- `-c, --context <CONTEXT>`: 提供变更的额外上下文信息
-- `--max-tokens <NUM>`: 生成消息的最大令牌数（默认：8192）
-- `--temperature <NUM>`: AI 生成的温度参数，范围 0.0-2.0（默认：0.7）
+- `-d, --dry-run`: Only display generated commit message, don't execute commit
+- `-m, --model <MODEL>`: Specify AI model or use "provider/model" format
+- `-r, --rules <RULES>`: Custom commit message generation rules
+- `-c, --context <CONTEXT>`: Provide additional context for changes
+- `--max-tokens <NUM>`: Maximum tokens for generated message (default: 8192)
+- `--temperature <NUM>`: AI generation temperature parameter, range 0.0-2.0 (default: 0.7)
 
-## 许可证
+## License
 
-本项目基于 MIT 许可证开源 - 详见 [LICENSE](LICENSE) 文件。
+This project is open source under the MIT License - see the [LICENSE](LICENSE) file for details.
